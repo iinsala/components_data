@@ -2,7 +2,7 @@
 
 Camera -> ZED 2i
 
-Jetson -> Orin Nx 16GB or Xavier 32 GB
+Jetson ->
 
 LiDAR -> main lidar S2 or S3 from slamtek
 
