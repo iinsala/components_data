@@ -1,0 +1,903 @@
+<section class="sct--xs" id="tech_specs">
+    <h2 class="h--medium txt-cntr">Technical Specifications</h2>
+            
+<style>
+        .table_rollup {
+            overflow-y: hidden;
+            transition: height 2s;
+        }
+
+        .table_rollup .table_opener {
+            display: none;
+        }
+
+        .table_rollup table {
+            min-width: 100%;
+        }
+
+        .table_rolled {
+            height: 20em;
+        }
+
+        .table_rollup.table_rolled .table_opener {
+            display: block;
+        }
+
+        .table_opener {
+            position: absolute;
+            width: 100%;
+            top: 8.75em;
+            left: 0;
+            background: red;
+            text-align: center;
+            padding: 5em 0;
+            background: rgb(255, 255, 255);
+            background: linear-gradient(0deg, rgba(255, 255, 255, 0.908846986060049) 50%, rgba(255, 255, 255, 0) 100%);
+        }
+
+        .small_ruler {
+            display: block;
+            border-top: 1px solid #ddd;
+            width: 80%;
+            max-width: 2em;
+            margin: 0.5em auto;
+        }
+
+        .small_ruler_left {
+            margin: 0.5em 0;
+            max-width: 3em;
+        }
+    </style>
+    <script>
+        function unrollTable() {
+            let tableThing = document.getElementById("tech_specs_table");
+            console.log(tableThing);
+            tableThing.classList.remove("table_rolled");
+        }
+    </script>
+    <div class="cntnr--cw">
+      <div class="row">
+        <div id="tech_specs_table" class="tech-specs col-md-12 table_rollup">
+            <table class="table table-bordered table-striped table-hover" role="table">
+                <thead>
+                    <tr class="uppercase">
+                        <th style="width: 11.111%" rowspan="2"></th>
+                       
+                       
+                       
+                    
+                        
+                        
+                        
+                  
+                        
+                       
+                            
+                            
+                            
+                            
+                       
+                        
+                      
+                       
+                        
+
+                        <th style="width: 22.222%" class="text-center" colspan="3">
+                            <span>
+                             <b>Jetson AGX Orin Series</b>
+                            </span>
+         
+                        </th>
+
+
+                        <th style="width: 22.222%" class="text-center" colspan="2">
+                            <span>
+                             <b>Jetson Orin NX Series</b>
+                            </span>
+                        </th>
+
+                        <th style="width: 22.222%" class="text-center" colspan="2">
+                            <b><span>Jetson Orin Nano Series</span></b>
+
+                            
+                        </th>
+
+                        <th style="width: 22.222%" class="text-center" colspan="3">
+                            <b><span>Jetson AGX Xavier Series</span></b>
+      
+                            
+                        </th>
+                        <th style="width: 22.222%" class="text-center" colspan="2">
+                            <b><span>Jetson Xavier NX Series</span></b>
+                        </th>
+                        
+                        <th style="width: 22.222%" class="text-center" colspan="4">
+                            <b><span>Jetson TX2 Series</span></b>
+                        </th>
+                       
+                        
+                        <th style="width: 22.222%" rowspan="2">
+                         
+                            <span><a href="#jetson_nano">Jetson Nano</a></span>
+                            
+                        </th>  
+                        
+                        
+                    </tr>
+
+                    <tr>
+                         
+   
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_orin">Jetson AGX Orin 64GB</a></th>
+
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_orin">Jetson AGX Orin Industrial</a></th>
+
+                         <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_orin">Jetson AGX Orin 32GB </a></th>
+                        
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nx">Jetson Orin NX 16GB</a></th>
+                       
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nx">Jetson Orin NX 8GB</a></th>
+                      
+                         <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nano">Jetson Orin Nano 8GB</a></th>
+                        
+                         <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nano">Jetson Orin Nano 4GB</a></th>
+                        
+                          <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_xavier">Jetson AGX Xavier Industrial</a></th>
+                        
+                           <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_xavier">Jetson AGX Xavier 64GB</a></th>
+                     
+                           <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_xavier">Jetson AGX Xavier</a></th>
+                     
+                            <th class="text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_xavier_nx">Jetson Xavier NX 16GB</a></th>
+                     
+                          <th class="text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_xavier_nx">Jetson Xavier NX</a></th>
+                     
+                          <th class="text-center"><a href="#jetson_tx2">TX2i</a></th>
+                     
+                          <th class="text-center"><a href="#jetson_tx2">TX2</a></th>
+                       
+                         <th class="vertical-table-border-left text-center" style="min-width: 4em"><a href="#jetson_tx2">TX2 4GB</a></th>
+                       
+                         <th class="vertical-table-border-left text-center"><a href="#jetson_tx2">TX2 NX</a></th>
+                            
+                    </tr>
+                           
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row"><b>AI Performance</b></th>
+                        <td colspan="1">275 TOPS</td>
+                        <td>248 TOPS</td>
+                        <td>200 TOPS</td>
+                        <td>100 TOPS</td>
+                        <td>70 TOPS</td>
+                        <td>40 TOPs</td>
+                        <td>20 TOPs</td>
+                        <td>30 TOPS</td>
+                        <td colspan="2">32 TOPS</td>
+                        <td class="vertical-table-border" colspan="2">21 TOPS</td>
+                        <td class="text-center text-center-vertical  vertical-table-border" colspan="1">1.26 TFLOPS</td>
+                        <td class="text-center text-center-vertical  vertical-table-border" colspan="3">1.33 TFLOPS</td>
+                        <td class="vertical-table-border-center">472 GFLOPS</td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><b>GPU</b></th>
+
+                        <td class="vertical-table-border" colspan="2">2048-core NVIDIA Ampere architecture GPU with  <br>  64 Tensor Cores</td>
+                        <td class="vertical-table-border" colspan="1">1792-core NVIDIA Ampere architecture GPU with <br> 56 Tensor Cores</td>
+                        <td class="vertical-table-border" colspan="2">1024-core NVIDIA Ampere architecture GPU with <br> 32 Tensor Cores		</td>
+                        <td>1024-core NVIDIA Ampere architecture GPU with 32 Tensor Cores</td>
+                        <td>512-core NVIDIA Ampere architecture GPU with 16 Tensor Cores</td>
+                        <td colspan="3">512-core NVIDIA Volta architecture GPU with <br> 64 Tensor Cores</td>
+                        <td class="vertical-table-border" colspan="2">384-core NVIDIA Volta™ architecture GPU with 48 Tensor Cores</td>
+                        <td class="text-center vertical-table-border" colspan="4">256-core NVIDIA Pascal™ architecture GPU</td>
+                        <td class="vertical-table-border-center">128-core NVIDIA Maxwell™ architecture GPU</td>
+
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>GPU Max Frequency</b></th>
+                        <td class="vertical-table-border-center" colspan="1">1.3 GHz	</td>
+                        <td class="vertical-table-border-center" colspan="1">1.2 GHz	</td>
+                        <td class="vertical-table-border-center" colspan="1">930 MHz</td>
+                        <td class="vertical-table-border-center" colspan="1">918 MHz</td>
+                        <td class="vertical-table-border-center" colspan="1">765 MHz</td>
+                        <td class="vertical-table-border-center" colspan="2">625 MHz	</td>
+                        <td class="vertical-table-border-center" colspan="1">1211 MHz</td>
+                        <td class="vertical-table-border-center" colspan="2">1377 MHz	</td>
+                        <td colspan="2">1100 MHz	</td>
+                        <td class="vertical-table-border" colspan="1">1.12GHz		</td>
+                        <td class="text-center vertical-table-border" colspan="3">1.3 GHz</td>
+                        <td class="vertical-table-border-center">921MHz</td>
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>CPU</b></th>
+                        <td class="vertical-table-border" colspan="2">12-core NVIDIA Arm® Cortex A78AE v8.2 64-bit CPU <br> 3MB L2 + 6MB L3</td>
+                        <td class="vertical-table-border" colspan="1">8-core NVIDIA Arm® Cortex A78AE v8.2 64-bit CPU <br> 2MB L2 + 4MB L3</td>
+                        <td class="vertical-table-border" colspan="1">8-core NVIDIA Arm® Cortex A78AE v8.2 64-bit CPU <br> 2MB L2 + 4MB L3</td>
+                        <td class="vertical-table-border" colspan="1">6-core NVIDIA Arm® Cortex A78AE v8.2 64-bit CPU <br> 1.5MB L2 + 4MB L3</td>                       
+                        <td class="vertical-table-border" colspan="2">6-core Arm® Cortex®-A78AE v8.2 64-bit CPU <br>1.5MB L2 + 4MB L3	</td>
+                        <td colspan="3">8-core NVIDIA Carmel Arm®v8.2 <br>64-bit CPU <br>8MB L2 + 4MB L3</td>
+                        <td class="vertical-table-border" colspan="2">6-core NVIDIA Carmel Arm®v8.2 64-bit CPU <br>6MB L2 + 4MB L3</td>
+                        <td class="text-center vertical-table-border" colspan="4">Dual-Core NVIDIA Denver 2 64-Bit CPU and Quad-Core Arm® Cortex®-A57 MPCore processor</td>
+                        <td class="vertical-table-border-center">Quad-Core Arm® Cortex®-A57 MPCore processor</td>
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>CPU Max Frequency</b></th>
+                        <td class="vertical-table-border" colspan="1">2.2 GHz	</td>
+                        <td class="vertical-table-border" colspan="1">2.0 GHz	</td>
+                        <td class="vertical-table-border" colspan="1">2.2 GHz	</td>
+                        <td class="vertical-table-border" colspan="2">2.0 GHz	</td>
+                        <td class="vertical-table-border" colspan="2">1.5 GHz</td>
+                        <td class="vertical-table-border" colspan="1">2.0 GHz</td>
+                         <td class="vertical-table-border" colspan="2">2.2 GHz</td>
+                        <td colspan="2">1.9 GHz</td>
+                        <td class="vertical-table-border" colspan="1">Denver2: 1.95 GHz <br>
+Cortex-A57: 1.92 GHz</td>
+                        <td class="text-center vertical-table-border" colspan="3">Denver 2: 2.2 GHz <br>
+Cortex-A57: 2 GHz				</td>
+                        <td class="vertical-table-border-center">1.43GHz</td>
+                        
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><a href="https://developer.nvidia.com/deep-learning-accelerator" target="_blank">DL Accelerator</a></th>
+                            
+                        <td class="vertical-table-border" colspan="4"><center>2x NVDLA v2.0</center></td>
+                        <td class="vertical-table-border" colspan="1"><center>1x NVDLA v2.0</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>—</center></td>
+                        <td colspan="5" class="text-center">
+                            <center>2x NVDLA</center>
+                        </td>
+                        <td colspan="5" class="vertical-table-border text-center">—</td>
+                    </tr>
+                    
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>DL Max Frequency</b></th>                        
+                        <td class="vertical-table-border" colspan="1"><center>1.6 Ghz</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>1.4 Ghz</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>614 MHz</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>—</center></td>
+                        <td class="vertical-table-border" colspan="1"><center>1.2 Ghz</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>1.4 GHz</center></td>
+                        <td colspan="2" class="text-center">
+                            <center>1.1 GHz</center>
+                        </td>
+                        <td colspan="5" class="vertical-table-border text-center">—</td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><b>Vision Accelerator</b></th>
+                         <td class="vertical-table-border" colspan="5"><center>1 x PVA v2.0</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>—</center></td>
+                        
+                        <td colspan="5" class="text-center">
+                            <center>2x PVA v1.0</center>
+                        </td>
+                        <td colspan="5" class="vertical-table-border text-center">—</td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><b>Safety Cluster Engine</b></th>
+                        <td class="vertical-table-border" colspan="1"><center>—</center></td>
+                        <td class="vertical-table-border" colspan="1"><center>—</center></td>
+                        <td class="vertical-table-border" colspan="1"><center>—</center></td>
+                        <td class="vertical-table-border" colspan="1"><center>—</center></td>
+                        <td class="vertical-table-border" colspan="1"><center>—</center></td>
+                        <td class="vertical-table-border" colspan="2"><center>—</center></td>
+                        <td colspan="1" class="text-center">
+                            2x Arm<sup>®</sup> <br>Cortex<sup>®</sup>-R5 in lockstep
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><b>Memory</b></th>          
+                        
+                        <td>64GB 256-bit LPDDR5<br>204.8GB/s</td>
+                        <td>64GB 256-bit LPDDR5 (+ ECC)<br>204.8GB/s</td>
+                        <td>32GB 256-bit LPDDR5 <br> 204.8GB/s"</td>
+                        <td>16GB 128-bit LPDDR5<br>102.4GB/s</td>
+                        <td>8GB 128-bit LPDDR5 <br>102.4GB/s</td>
+                        <td>8GB 128-bit LPDDR5 <br>68 GB/s	</td>
+                        <td>4GB 64-bit LPDDR5 <br> 34 GB/s</td>
+                        <td>32GB 256-bit LPDDR4x (ECC support) <br> 136.5GB/s</td>
+                        <td>64GB 256-bit LPDDR4x<br>136.5GB/s</td>
+                        <td>32GB 256-bit LPDDR4x <br> 136.5GB/s</td>
+                        <td class="vertical-table-border-center">16GB 128-bit LPDDR4x<br>59.7GB/s</td>
+                        <td class="vertical-table-border-center">8GB 128-bit LPDDR4x<br>59.7GB/s</td>
+                        <td class="vertical-table-border-center">8GB 128-bit LPDDR4 (ECC Support)<br>51.2GB/s</td>
+                        <td class="vertical-table-border-center">8GB 128-bit LPDDR4<br>59.7GB/s</td>
+                        <td class="vertical-table-border-center" colspan="2">4GB 128-bit LPDDR4<br>51.2GB/s</td>
+                        <td class="vertical-table-border-center">4GB 64-bit LPDDR4 <br>25.6GB/s"	</td>
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>Storage</b></th>
+                        <td class="vertical-table-border-center" colspan="3">64GB eMMC 5.1</td>
+                        <td class="vertical-table-border-center" colspan="4">
+<center> — <br> (Supports external NVMe) </center>	</td>
+                        <td class="vertical-table-border-center">64GB eMMC 5.1 </td>
+                        <td class="vertical-table-border-center" colspan="2">32GB eMMC 5.1</td>
+                        <td class="vertical-table-border-center" colspan="2">
+                            16GB eMMC 5.1
+                            
+                        </td>
+                        <td colspan="2" class="vertical-table-border-right text-center">32GB eMMC 5.1</td>
+                        <td class="vertical-table-border" colspan="2">16GB eMMC 5.1</td>
+                        <td class="vertical-table-border-center">16GB eMMC 5.1
+                            <b><a href="#storage_note">†</a></b>
+</td>
+                    </tr>
+                    
+                    
+                    
+                     <tr>
+                        <th scope="row"><b>Video Encode</b></th>
+                                             
+                        <td class="vertical-table-border-left text-center">
+                          2x 4K60 (H.265)<br>
+                          4x 4K30 (H.265)<br>
+                          8x 1080p60 (H.265)<br>
+                          16x 1080p30 (H.265)
+                        </td>
+                          <td colspan="1" class="vertical-table-border text-center">
+                          1x 4K60 (H.265)<br>
+                          3x 4K30 (H.265)<br>
+                          7x 1080p60 (H.265)<br>
+                          15x 1080p30 (H.265)
+                        </td> 
+                        <td colspan="3" class="vertical-table-border-right text-center">
+                          1x 4K60 (H.265)<br>
+                          3x 4K30 (H.265)<br>
+                          6x 1080p60 (H.265)<br>
+                          12x 1080p30 (H.265)
+                        </td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                         1080p30 supported by 1-2 CPU cores
+                        </td>
+                        
+                        <td class="vertical-table-border text-center" colspan="1">
+                            2x 4K60 (H.265)<br>
+                            6x 4K30 (H.265)<br>
+                            12x 1080p60 (H.265)<br>
+                            24x 1080p30 (H.265)
+
+                        </td>
+                           <td class="vertical-table-border text-center" colspan="2">
+                            4x 4K60 (H.265)<br>
+                            8x 4K30 (H.265)<br>
+                            16x 1080p60 (H.265)<br>
+                            32x 1080p30 (H.265)
+
+                        </td> 
+                        <td class="vertical-table-border text-center" colspan="2">
+                            2x 4K60 (H.265)
+                            4x 4K30 (H.265)
+                            10x 1080p60 (H.265)
+                            22x 1080p30 (H.265)
+                        </td> 
+                        <td class="vertical-table-border text-center" colspan="4">
+                          1x 4K60 (H.265)<br>
+                          3x 4K30 (H.265)<br>
+                          4x 1080p60 (H.265)
+                        </td>
+                         <td class="vertical-table-border text-center" colspan="1">
+                            1x 4K30 (H.265)<br>
+                            2x 1080p60 (H.265)
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><b>Video Decode</b></th>
+    
+                        <td class="vertical-table-border-left text-center">
+                           1x 8K30 (H.265)<br>
+                           3x 4K60 (H.265)<br>
+                           7x 4K30 (H.265)<br>
+                           11x 1080p60 (H.265)<br>
+                           22x 1080p30 (H.265)
+                        </td>
+                          <td colspan="1" class="vertical-table-border text-center">
+                          1x 8K30 (H.265)<br>
+                          3x 4K60 (H.265)<br>
+                          7x 4K30 (H.265<br>
+                          11x 1080p60 (H.265)<br>
+                          23x 1080p30 (H.265)
+                        </td>
+                          <td colspan="3" class="vertical-table-border-right text-center">
+                            1x 8K30 (H.265)<br>
+                            2x 4K60 (H.265)<br>
+                            4x 4K30 (H.265)<br>
+                            9x 1080p60 (H.265)<br>
+                            18x 1080p30 (H.265)<br>
+
+                        </td>
+                          <td colspan="2" class="vertical-table-border text-center">
+                         1x 4K60 (H.265)<br>
+                         2x 4K30 (H.265)<br>
+                         5x 1080p60 (H.265)<br>
+                         11x 1080p30 (H.265)<br>
+                        </td>
+                         <td class="vertical-table-border text-center" colspan="1">
+                            2x 8K30 (H.265)<br>
+                            4x 4K60 (H.265)<br>
+                            8x 4K30 (H.265)<br>
+                            18x 1080p60 (H.265)<br>
+                            36x 1080p30 (H.265)
+
+                        </td>
+                         <td class="vertical-table-border text-center" colspan="2">
+                            2x 8K30 (H.265)<br>
+                            6x 4K60 (H.265)<br>
+                            12x 4K30 (H.265)<br>
+                            26x 1080p60 (H.265)<br>
+                            52x 1080p30 (H.265)
+
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                            2x 8K30 (H.265)<br>
+                            6x 4K60 (H.265)<br>
+                            12x 4K30 (H.265)<br>
+                            22x 1080p60 (H.265)<br>
+                             44x 1080p30 (H.265)
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="4">
+                           2x 4K60 (H.265)<br>
+                            7x 1080p60 (H.265) <br>
+                            14x 1080p30 (H.265)
+                        </td>
+                         <td class="vertical-table-border text-center" colspan="1">
+                           1x 4K60 (H.265)<br>
+                          4x 1080p60 (H.265)
+                        </td>
+                    </tr>
+                    
+           
+                    
+                    <tr>
+                        <th scope="row"><b>CSI Camera</b></th> 
+                        <td colspan="3" class="text-center">
+                            Up to 6 cameras <br>(16 via virtual channels**)
+                            <span class="small_ruler small_ruler_center"></span>
+                            16 lanes MIPI CSI-2
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 2.1 (up to 40Gbps) | C-PHY 2.0 (up to 164Gbps)
+                            <span class="small_ruler small_ruler_center"></span>
+                            
+                        </td>
+                        <td colspan="2" class="text-center">Up to 4 cameras <br>(8 via virtual channels***) <br>
+                          8 lanes MIPI CSI-2 <br>
+                          D-PHY 2.1 (up to 20Gbps)			
+                          </td>
+                        <td colspan="2" class="text-center">Up to 4 cameras <br>(8 via virtual channels***) <br>
+                          8 lanes MIPI CSI-2 <br>
+                          D-PHY 2.1 (up to 20Gbps)			
+                          </td>
+                        <td class="text-center">
+                            Up to 6 cameras <br>(36 via virtual channels)
+                            <span class="small_ruler small_ruler_center"></span>
+                            16 lanes MIPI CSI-2 
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 1.2 (up to 40 Gbps)
+                            <span class="small_ruler small_ruler_center"></span>
+                            C-PHY 1.1 (up to 62 Gbps)
+                        </td>
+                        <td colspan="2" class="text-center">
+                            Up to 6 cameras <br>(36 via virtual channels)
+                            <span class="small_ruler small_ruler_center"></span>
+                            16 lanes MIPI CSI-2 | 8 lanes SLVS-EC
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 1.2 (up to 40 Gbps)
+                            <span class="small_ruler small_ruler_center"></span>
+                            C-PHY 1.1 (up to 62 Gbps)
+                        </td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                            Up to 6 cameras <br>(24 via virtual channels)
+                            <span class="small_ruler small_ruler_center"></span>
+                            14 lanes MIPI CSI-2
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 1.2 (up to 30 Gbps)<br>
+                        </td> 
+                        <td colspan="3" class="vertical-table-border text-center">
+                            Up to 6 cameras <br> (12 via virtual channels)
+                            <span class="small_ruler small_ruler_center"></span>
+                            12 lanes MIPI CSI-2 
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 1.2 (up to 30 Gbps)
+                        </td>
+                        <td class="text-center">
+                            Up to 5 cameras<br>
+                            (12 via virtual channels)
+                            <span class="small_ruler small_ruler_center"></span>
+                            12 lanes MIPI CSI-2
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 1.1 (up to 30 Gbps)
+                        </td>
+                        <td class="vertical-table-border-center text-center">
+                            Up to 4 cameras <br>
+                            <span class="small_ruler small_ruler_center"></span>
+                            12 lanes MIPI CSI-2
+                            <span class="small_ruler small_ruler_center"></span>
+                            D-PHY 1.1 (up to 18 Gbps)
+                        </td>
+                       
+                        
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><b>PCIE*</b></th> 
+                        <td class="vertical-table-border text-center" colspan="3">
+                            Up to 2 x8 + 2 x4 + 2 x1 
+                            <br>(PCIe Gen4, Root Port &amp; Endpoint)
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                            1 x4 + 3 x1
+                            <br>(PCIe Gen4, Root Port &amp; Endpoint)
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">1 x4 + 3 x1 <br>
+(PCIe Gen3, Root Port, &amp; Endpoint)	</td>
+                        <td class="vertical-table-border text-center" colspan="3">
+                            1 x8 + 1 x4 + 1 x2 + 2 x1<br>
+                            (PCIe Gen4, Root Port &amp; Endpoint)
+                        </td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                            1 x4 (PCIe Gen4) <br> + 1 x1 (PCIe Gen3)
+                            
+                        </td>
+                        <td colspan="3" class="vertical-table-border text-center">
+                           up to 1 x1 + 1 x4 OR 1 x1 + 1 x1 + 1 x2
+                            <br>(PCIe Gen2)
+                        </td>
+                        <td class="vertical-table-border text-center">
+                            1 x1 + 1 x2
+                            <br>(PCIe Gen2)
+                        </td>
+                        <td class="vertical-table-border text-center">
+                            1 x4
+                            <br>(PCIe Gen2)
+                        </td>
+                        
+                    </tr>
+                    
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>USB*</b></th>
+
+                       <td class="vertical-table-border text-center" colspan="3">
+                            3x USB 3.2 Gen2 (10 Gbps)
+4x USB 2.0
+
+                        </td>
+                          <td class="vertical-table-border text-center" colspan="2">3x USB.3.2 Gen2 (10.Gbps) <br>
+3x USB 2.0			</td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                            3x USB 3.2 Gen2 (10 Gbps)
+3x USB 2.0
+                        </td>
+                        <td colspan="3" class="vertical-table-border text-center">
+                            3x USB 3.2 Gen2 (10 Gbps)
+4x USB 2.0
+                        </td>
+                        
+                        <td colspan="2" class="vertical-table-border text-center">
+                            1x USB 3.2 Gen2 (10 Gbps)
+3x USB 2.0
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="3">
+                            up to 3x USB 3.0 (5 Gbps)
+3x USB 2.0
+                        </td>
+                        <td class="vertical-table-border text-center">
+                            1x USB 3.0 (5 Gbps)
+3x USB 2.0
+                        </td>
+                        <td class="vertical-table-border text-center">
+                           1x USB 3.0 (5 Gbps)
+3x USB 2.0
+                        </td>  
+                    </tr>
+                    
+                    <tr>
+                        <th scope="row"><b>Networking*</b></th>
+                        
+                        <td colspan="3" class="vertical-table-border text-center">
+                           1x GbE <br>
+1x 10GbE
+
+                        </td> 
+                        <td colspan="2" class="vertical-table-border text-center">
+                            1x GbE	
+
+                        </td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                            1x GbE	
+
+                        </td>
+                        <td colspan="3" class="vertical-table-border text-center">
+                            1x GbE	
+
+                        </td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                            1x GbE	
+
+                        </td>
+                        <td class="vertical-table-border text-center">
+                            1x GbE
+
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                            1x GbE, WLAN
+                        </td>
+                        <td class="vertical-table-border text-center">
+                            1x GbE	
+                        </td>
+                        <td colspan="1" class="vertical-table-border text-center">
+                            1x GbE
+                        </td>
+                        
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>Display</b></th>
+ 
+                        <td class="vertical-table-border text-center" colspan="3">
+                            1x 8K60 multi-mode DP 1.4a (+MST)/eDP  
+                            <span class="small_ruler small_ruler_center"></span>
+                            1.4a/HDMI 2.1
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                            1x 8K60 multi-mode DP 1.4a (+MST)/eDP 
+                            <span class="small_ruler small_ruler_center"></span>
+                            1.4a/HDMI 2.1
+                        </td>
+                        <td colspan="2" class="vertical-table-border text-center">
+                          1x 4K30 multi-mode DP 1.2 (+MST)/eDP 1.4/HDMI 1.4**	
+                           
+                            
+                        </td>
+                      
+                        <td colspan="3" class="vertical-table-border text-center">
+                            3 multi-mode DP 1.4/eDP 1.4/HDMI 2.0
+                            
+                        </td> 
+                        <td colspan="2" class="vertical-table-border text-center">
+                            2 multi-mode DP 1.4/eDP 1.4/HDMI 2.0
+                            
+                        </td>
+                        <td colspan="3" class="vertical-table-border text-center">
+                            2 multi-mode DP 1.2/eDP 1.4/HDMI 2.0
+                            <span class="small_ruler small_ruler_center"></span>
+                            2 x4 DSI (1.5Gbps/lane)
+                        </td>
+                        <td colspan="1" class="vertical-table-border text-center">
+                           2 multi-mode DP 1.2/eDP 1.4/HDMI 2.0
+                            <span class="small_ruler small_ruler_center"></span>
+                            1 x2 DSI (1.5Gbps/lane)
+                        </td>
+                        <td colspan="1" class="vertical-table-border text-center">
+                            2 multi-mode DP 1.2/eDP 1.4/HDMI 2.0
+                            <span class="small_ruler small_ruler_center"></span>
+                            1 x2 DSI (1.5Gbps/lane)
+                        </td>
+                        
+                        
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>Other IO</b></th>
+                              
+                        <td class="vertical-table-border text-center" colspan="3">
+                           4x UART, 3x SPI, 4x I2S, 8x I2C, 2x CAN, PWM, DMIC &amp; DSPK, GPIOs 	
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                           3x UART, 2x SPI, 2x I2S, 4x I2C, 1x CAN, DMIC &amp; DSPK, PWM, GPIOs
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                           3x UART, 2x SPI, 2x I2S, 4x I2C, 1x CAN, DMIC &amp; DSPK, PWM, GPIOs
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="3">
+                          5x UART, 3x SPI, 4x I2S, 8x I2C, 2x CAN, PWM,  DMIC, GPIOs
+                        </td> 
+                        <td class="vertical-table-border text-center" colspan="2">
+                           3x UART, 2x SPI, 2x I2S, 4x I2C, 1x CAN, DMIC &amp; DSPK, PWM, GPIOs
+                        </td> 
+                        <td class="vertical-table-border text-center" colspan="3">
+                           5x UART, 3x SPI, 4x I2S, 8x I2C, 2x CAN, GPIOs
+                        </td>
+                        <td class="vertical-table-border text-center">
+                          3x UART, 2x SPI, 4x I2S, 4x I2C, 1x CAN, GPIOs		 
+                        </td>
+                        <td class="vertical-table-border text-center">
+                           3x UART, 2x SPI, 2x I2S, 4x I2C, GPIOs
+                        </td>
+                        
+                    </tr>
+                    
+                    
+                    <tr>
+                        <th scope="row"><b>Power</b></th>
+                        <td class="vertical-table-border text-center" colspan="1">15W - 60W</td>
+                        <td class="vertical-table-border text-center">15W - 75W</td>
+                        <td class="vertical-table-border text-center">15W - 40W</td>
+                        <td class="vertical-table-border text-center">10W - 25W</td>
+                        <td class="vertical-table-border text-center">10W - 20W</td>
+                        <td class="vertical-table-border text-center">7W - 15W</td>
+                        <td class="vertical-table-border text-center">7W - 10W</td>
+                        
+                        <td class="vertical-table-border text-center">20W - 40W</td>
+                        <td class="vertical-table-border text-center" colspan="2">10W - 30W</td>
+                        <td class="vertical-table-border text-center" colspan="2">10W - 20W</td>
+                        <td class="vertical-table-border text-center">10W - 20W</td>
+                        <td class="vertical-table-border text-center" colspan="3">7.5W - 15W</td>
+                        <td class="vertical-table-border text-center" colspan="1">5W - 10W</td>
+                    </tr>
+                    
+                    
+                    
+                    
+                    
+                    
+                    <tr>
+                        <th class="table-border-bottom" scope="row"><b>Mechanical</b></th>
+                        
+   
+                        <td class="vertical-table-border text-center" colspan="3">
+                            100mm x 87mm <br>
+                            
+                            699-pin Molex Mirror Mezz Connector 
+                            
+                           Integrated Thermal
+                          
+                            Transfer Plate
+                        </td>
+                         
+                        <td class="vertical-table-border text-center" colspan="2">
+                            69.6mm x 45mm
+		                        <span class="small_ruler small_ruler_center"></span>
+                            260-pin SO-DIMM connector	
+                            
+                        </td>  
+                        <td class="vertical-table-border text-center" colspan="2">
+                            69.6mm x 45mm
+                            <span class="small_ruler small_ruler_center"></span>
+                            260-pin SO-DIMM connector
+                        </td>  
+                        <td class="table-border-bottom vertical-table-border text-center" colspan="3">
+                            100mm x 87mm<span class="small_ruler"></span>
+                            699-pin connector<span class="small_ruler"></span>
+                            Integrated Thermal Transfer Plate
+                        </td>
+                        <td class="vertical-table-border text-center" colspan="2">
+                            69.6mm x 45mm
+                            <span class="small_ruler small_ruler_center"></span>
+                           260-pin SO-DIMM connector
+                        </td>
+                        <td class="table-border-bottom vertical-table-border-left text-center" colspan="3">
+                            87mm x 50mm
+                            <span class="small_ruler"></span> 400-pin connector
+                            <span class="small_ruler"></span> Integrated Thermal Transfer Plate
+                        </td>
+                        <td class="table-border-bottom vertical-table-border-left text-center">
+                            69.6mm x 45mm<span class="small_ruler"></span> 260-pin SO-DIMM connector
+                        </td>
+                        
+                        <td class="table-border-bottom vertical-table-border-left text-center">
+                            69.6mm x 45mm<span class="small_ruler"></span> 260-pin SO-DIMM connector
+                        </td>
+                       
+                        
+                    </tr>
+                </tbody>
+                <thead class="table-bottom-head">
+                    <tr>
+                        <th class="text-center" colspan="1"></th>
+
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_orin">Jetson AGX Orin 64GB</a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_orin">Jetson AGX Orin Industrial</a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_orin">Jetson AGX Orin 32GB </a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nx">Jetson Orin NX 16GB </a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nx">Jetson Orin NX 8GB</a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nano">Jetson Orin Nano 8GB </a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_orin_nano">Jetson Orin Nano 4GB</a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_xavier">Jetson AGX Xavier Industrial</a></th>
+                        <th class="text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_xavier">Jetson AGX Xavier 64GB </a></th>
+                        <th><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_agx_xavier">Jetson AGX Xavier</a></th>
+                        <th class="text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_xavier_nx">Jetson Xavier NX 16GB</a></th>
+                        <th class="text-center"><a href="/embedded/jetson-modules#jetson_xavier_nx">Jetson Xavier NX </a></th>
+                        <th class="text-center"><a href="/embedded/jetson-modules#jetson_tx2">TX2i</a></th>
+                        <th class="text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_tx2">TX2</a></th>
+                         
+                        <th class="vertical-table-border-left text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_tx2">TX2 4GB</a></th>
+                        <th class="vertical-table-border-left text-center"><a href="https://developer.nvidia.com/embedded/jetson-modules#jetson_tx2">TX2 NX</a></th>
+                    </tr>
+                    <tr class="uppercase">
+                        <th class="table-no-ceiling" rowspan="1"></th>
+                         
+                        <th class="table-no-ceiling" colspan="3">
+                            <span>
+                               
+                                   <b>Jetson AGX Orin Series</b>
+                                
+                            </span>
+                        </th>
+                         <th class="table-no-ceiling" colspan="2">
+                            <span>
+                               
+                                   <b>Jetson Orin NX Series</b>
+                               
+                            </span>
+                        </th>
+                        <th class="table-no-ceiling" colspan="2">
+                            <span>
+                                
+                                    <b>Jetson Orin Nano Series</b>
+                                
+                            </span>
+                        </th>
+                        <th class="table-no-ceiling" colspan="3">
+                            <span>
+                                
+                                    <b>Jetson AGX Xavier Series</b>
+                                
+                            </span>
+                        </th>
+                        <th class="table-no-ceiling" colspan="2">
+                            <span>
+                               
+                                    <b>Jetson Xavier NX Series</b>
+                               
+                            </span>
+                        </th>
+                        <th class="text-center" colspan="4">
+                            <span>
+                                
+                                    <b>Jetson TX2 Series</b>
+                                </span>
+                            
+                        </th>
+                        <th class="table-no-ceiling">
+                            <span>
+                                <a href="#jetson_nano">
+                                    Jetson Nano
+                                </a>
+                            </span>
+                        </th>
+                    </tr>
+                </thead>
+            </table>
+
+            <div class="row">
+                <br>
+                <div class="col-md-2"></div>
+                <div class="col-md-8">
+                    <div style="padding-bottom: 1em;">
+                        
+                        <p id="storage_note" class="small"><strong>†</strong> The Jetson Nano and Jetson Xavier NX modules included as part of the Jetson Nano developer kit and the Jetson Xavier NX developer kit have slots for using microSD cards instead of eMMC as system storage devices.</p>
+                        
+                        <p class="small">* USB 3.2, MGBE, and PCIe share UPHY Lanes. See the Product Design Guide for supported UPHY configurations.</p>
+                    
+                    <p class="small">** See the Jetson Orin Nano Series Data Sheet for more details on additional compatibility to DP 1.4a and HDMI 2.1 </p>
+                    <p class="small">*** Virtual Channels for Jetson Orin NX and Jetson Orin Nano are subject to change </p>
+                    <p class="small">Refer to the Software Features section of the latest <a href="https://docs.nvidia.com/jetson/JetsonLinux/DeveloperGuide/index.html" target="_blank">NVIDIA Jetson Linux Developer Guide</a> for a list of supported features.</p>
+                    </div>
+                    <div class="seperator"></div>
+                </div>
+            </div>
+            <div class="table_opener">
+                <a class="cta--prim text-white" onclick="unrollTable()">Click to Expand</a>
+            </div>
+        </div>
+    </div>
+    </div>
+</section>
