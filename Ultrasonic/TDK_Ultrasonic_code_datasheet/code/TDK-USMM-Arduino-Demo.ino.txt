@@ -1,0 +1,4041 @@
+/*************************************************
+ *  (C) TDK Electronics GmbH & Co
+ *  All rights reerved
+ *  
+ *  Title     : TDK-USSM-Arduino-Demo
+ *  Release   : V0.8
+ *  Version   : 2021-12-20 
+ *  Descrption: 
+ *    TDK Ultrasonic Sensor Arduino Demo Software
+ *    
+ *  ARDUINO SETUP:
+ *  ==============
+ *    - Configuration:
+ *      - Port : Select the port on which the board is connected (COMxx)   
+ *      - Mode: 115200 - 8N1 
+ *      
+ *    - TDK_DEMO_BOARD 
+ *      - Install STM32 Arduino package: https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
+ *      - Then go to board manager (Tools -> Board -> Boards Manager) and install: STM32 MCU Based Boards 
+ *      - Configuration:
+ *        - Board : "Generic STM32L4 Series" 
+ *        - Board Part Number: "Generic L432KCUx"
+ *        - Uart : Enable Generic Serial. But the board uses HardwareSerial Serial1
+ *        - USB  : none
+ *        - 
+ *        - Optimize: Faster -O3
+ *        - Upload Method: STM32CubeProgrammer (SWD)
+ *        - Port : Select the port on which the board is connected (COMxx)    
+ *        
+ *    - TDK_ARDUINO_NANO_SHIELD_V1
+ *      - Nothing to install if using Arduino Nano board
+ *      - Configuration:
+ *        - Board : "Arduino Nano" 
+ *        - Programmer : ArduinoISP
+ *        - Port : Select the port on which the board is connected (COMxx) 
+ *        
+ *    - ADAFRUIT_FEATHER_32U4
+ *      - Follow provider Instructions
+ *      - Configuration:
+ *        - Board : "Adafruit feather 32u4" 
+ *        - Programmer: SUSBtinyISP
+ *        - Port : Select the port on which the board is connected (COMxx feather 32u4)   
+ *        
+ *  HARDWARE SETUP:
+ *  ==============
+ *    - TDK Ultrasonic Sensor has 3 pins:
+ *      1- VS : to be connected to a power supply in the range of 6V to 18V. (Default 12V)
+ *      2- IO : Is a bidirectional IO with signal range in 0 to VS
+ *      3- GND: Ground signal shall be same as Arduino GND
+ *      
+ *    - TDK Demo Board:
+ *      1- Sensors 0 using any of available connectors
+ *      2- Sensor 1 using any of available connnectors
+ *      3- USB A-to-microB for serial streamout (FTDI driver)
+ *      4- Optionally STM32 SWD Debugger if you need to change the code
+ *      
+ *    - Using Different Hardware:
+ *      1- Driver which could be:
+ *        - N-MOS : to operate as a Low-Side switch:
+ *          + Gate  to Arduino Trigger Pin
+ *          + Drain to IO Line.
+ *          + Source to GND
+ *        - LIN Transceiver :
+ *          + Vsup same as Sensor VS
+ *          + GND same as Sensor & Arduino GND
+ *          + TX to Arduino Trigger Pin
+ *      2- Receiver which could be: 
+ *        - Voltage adapater using Simple resistor-divider:
+ *          + Upper-end to IO Line
+ *          + Lower-end to GND
+ *          + Mid-point to Arduino Echo Pin insuring that max voltage is within Arduino voltage range (5V or 3V3 depending of hardware version)  
+ *        - Zenner diode + Resistor
+ *          + Upper-end (Zenner Kathode) to IO Line
+ *          + Lower-end (Resistor) to GND
+ *          + Mid-point to Arduino Echo Pin insuring that max voltage is within Arduino voltage range (5V or 3V3 depending of hardware version)
+ *        - LIN Transceiver :
+ *          + RX to Arduino Echo Pin
+ *              
+ *   Note:    
+ *    - IO Line requires a Pull-up to VS. Some of sensors have it inside, but some others variants do not have it.
+ *    - If your sensor does not have an internal pull-up, you need to add an external 6.8KOhm pull-up resistor between IO and VS.
+ *      
+ *  
+ *************************************************/
+//-------------------------------------------
+// Add necessary Includes
+//-------------------------------------------
+//-- Common Arduino Includes
+ #include <Arduino.h>
+ #include <SPI.h>
+
+//-- Select Board to Use
+//#define TDK_ARDUINO_NANO_SHIELD_V1
+//#define TDK_USSM_NUCLEO_L432_NANO_SHIELD_V1
+//#define ADAFRUIT_FEATHER_32U4
+#ifdef __STM32F429xx_H
+  #define TDK_USSM_Lab_Board
+#endif
+#ifdef __STM32L432xx_H
+  #define TDK_USSM_Demo_Board
+#endif
+
+//-- TDK USSM Library
+ #include "tdk_ussm/tdk_ussm_defs.h"
+ #include "tdk_ussm/tdk_ussm_config.h"
+
+
+/*********************************
+ * Use this switch to enable full version or small footprint version
+ ********************************/
+
+#define     COM_REQUEST_TERMINATOR    ';' 
+#define     COM_RESPONSE_TERMINATOR   '#' 
+#define     DEFAULT_STREAM_DELAY_US   100000  // 100 ms        
+
+//-------------------------------------------
+//  Hardware Parameters
+//-------------------------------------------
+
+#define     COMMN_FIRMWARE_VERSION        "20220302"  // Common Firmware Version
+
+  //-----------------------------------
+#if defined TDK_ARDUINO_NANO_SHIELD_V1
+  //-----------------------------------
+  #define     BOARD_NAME            "TDK_ARDUINO_NANO_SHIELD_V1"
+  #define     BOARD_VERSION         "20210920"
+  #define     BOARD_FIRMWARE        COMMN_FIRMWARE_VERSION // Use common Firmware Version
+  #define     SMALL_FOOTPRINT       1  // !! Small Footprint version ==> Very limited functionality !!
+  #define     N_SENSORS             4
+  
+  const int   TriggerPin[N_SENSORS] = {A3, A2, A1, A0}; // Trigger Pin of Ultrasonic Sensor
+  const int   EchoPin[N_SENSORS]    = {A4, A5, A6, A7}; // Echo Pin of Ultrasonic Sensor. Could same as Trigger pin if a bidir level shifter is used
+  const int   ProgPin[N_SENSORS]    = { 4,  4,  4,  4}; // Eeprom PRogramming Pin
+  const int   SYS_LED               = 13;
+  
+  #define     PC_Serial             Serial
+  #define     SoftwareReset()       while(0)
+  
+  #define     WAVE_BUFF_SIZE        128 
+  #define     COM_BUF_SIZE          32
+
+  #define     IO_DRIVE_LOW          HIGH
+  #define     IO_RELEASE            LOW 
+  #define     IO_IN_MODE            INPUT
+
+  #define     PROG_ENABLE           HIGH
+  #define     PROG_DISABLE          LOW
+
+
+  //-----------------------------------   
+#elif defined TDK_USSM_NUCLEO_L432_NANO_SHIELD_V1
+  //-----------------------------------
+  #include  <SPI.h>
+  #define   BOARD_NAME            "TDK_USSM_NUCLEO_L432_SHIELD"
+  #define   BOARD_VERSION         "20211020"
+  #define   BOARD_FIRMWARE        COMMN_FIRMWARE_VERSION // Use common Firmware Version
+  #define   N_SENSORS             4
+
+  const int   TriggerPin[N_SENSORS] = {PA4, PA3, PA1, PA0}; // Trigger Pin of Ultrasonic Sensor
+  const int   EchoPin[N_SENSORS]    = {PA5, PA6, PA6, PA7}; // Echo Pin of Ultrasonic Sensor. Could same as Trigger pin if a bidir level shifter is used
+  const int   AnaPin[N_SENSORS]     = {PA5, PA6, PA6, PA7}; // Analog IO Pin used for envelop over IO
+  const int   ProgPin[N_SENSORS]    = {PA12,PA12,PA12,PA12}; // Eeprom PRogramming Pin
+  const int   SYS_LED               = PB3;
+
+//  HardwareSerial Serial1(PA15, PA2); // Rx=PA15, Tx=PA2
+  #define    PC_Serial            Serial
+  #define    SoftwareReset()      HAL_NVIC_SystemReset()
+  void       Board_DemoBoardDiagnosis(int sel) {}
+  void       Board_JumpToBootloader(uint32_t pwd) {SoftwareReset();}
+    
+  #define     ANA_BUF_SIZE        512
+  #define     ANA_BUF_SIZE_TOTAL  (ANA_BUF_SIZE*N_SENSORS)  
+  #define     WAVE_BUFF_SIZE      1024
+  #define     TX_WAVE_BUFF_SIZE   256
+  #define     COM_BUF_SIZE        256
+
+  #define     IO_DRIVE_LOW        LOW
+  #define     IO_RELEASE          HIGH 
+  #define     IO_IN_MODE          INPUT_PULLUP  // INPUT
+
+  #define     PROG_ENABLE         HIGH
+  #define     PROG_DISABLE        LOW
+
+  //--------- JTAG interfaces
+  //-- SPI0  : Used as JTAG0 in Master-Mode
+  #define SPI1_NSS              PA4    
+  #define SPI1_SCK              PA5
+  #define SPI1_MISO             PA6
+  #define SPI1_MOSI             PA7    // Drives JTAG_TMS (during CR and DR transcations)
+  
+  //-- SPI1  : Used as JTAG1 in Master-Mode with MISO remapped
+  #define SPI2_NSS              SPI1_NSS
+  #define SPI2_SCK              SPI1_SCK
+  #define SPI2_MISO             PA11   
+  #define SPI2_MOSI             SPI1_MOSI
+
+  #define JTAG_BUF_MAX_SIZE     1024*2  
+  #define JTAG_N_PORT           2
+  const int JtagTmenPin[JTAG_N_PORT] = {SPI1_NSS,  SPI1_NSS }; // Test Mode Enable Active high
+  const int JtagTckPin[JTAG_N_PORT]  = {SPI1_SCK,  SPI1_SCK }; // Send on Falling Edge, Capture on Rising edge
+  const int JtagTmsPin[JTAG_N_PORT]  = {SPI1_MOSI, SPI1_MOSI}; // TMS active high 
+  const int JtagTdiPin[JTAG_N_PORT]  = {SPI1_MISO, SPI1_MISO}; // From Board to Sensor   -- Miso1 Shared
+  const int JtagTdoPin[JTAG_N_PORT]  = {SPI1_MISO, SPI2_MISO}; // From Sensors to Board  -- Miso1 Shared
+
+  //-----------------------------------
+#elif defined ADAFRUIT_FEATHER_32U4
+  //-----------------------------------
+  #define     BOARD_NAME            "ADAFRUIT_FEATHER_32U4"
+  #define     BOARD_VERSION         "20211115"
+  #define     BOARD_FIRMWARE        "20211223"
+  #define     PVDF_USMM_DEMO        1  // Combined PVDF and USMM Demo
+  #define     SMALL_FOOTPRINT       1  // !! Small Footprint version ==> Very limited functionality !!
+  #define     N_SENSORS             1
+  const int   TriggerPin[N_SENSORS] = {A1}; // Trigger Pin of Ultrasonic Sensor
+  const int   EchoPin[N_SENSORS]    = {A0}; // Echo Pin of Ultrasonic Sensor. Could same as Trigger pin if a bidir level shifter is used
+  const int   ProgPin[N_SENSORS]    = {A2}; // Eeprom PRogramming Pin
+  const int   PVDF_Sensor0          = A4 ;  // Optional for Demo purposes only
+  const int   SYS_LED               = 13;
+
+  #include "Adafruit_BLE.h"
+  #include "Adafruit_BluefruitLE_SPI.h"
+  #include "Adafruit_BluefruitLE_UART.h"
+  #include "BluefruitConfig.h"
+  
+  #if SOFTWARE_SERIAL_AVAILABLE
+    #include <SoftwareSerial.h>
+  #endif
+
+  void Board_AdaFruitBLE_Setup(void);
+  void Board_AdaFruitBLE_Read(char* rxStr, int maxSize);
+  void Board_AdaFruitBLE_Write(const char* txStr);
+  
+  #define     PC_Serial             Serial
+  #define     SoftwareReset()       while(0)
+  
+  #define     WAVE_BUFF_SIZE        128 
+  #define     COM_BUF_SIZE          32
+
+  #define     IO_DRIVE_LOW          HIGH
+  #define     IO_RELEASE            LOW 
+  #define     IO_IN_MODE            INPUT
+
+  #define     PROG_ENABLE           HIGH
+  #define     PROG_DISABLE          LOW
+
+  //-- BLE specific options
+  #define FACTORYRESET_ENABLE         1
+  #define MINIMUM_FIRMWARE_VERSION    "0.6.6"
+  #define MODE_LED_BEHAVIOUR          "MODE"
+
+  Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_RST);
+
+//  // A small helper
+//  void error(const __FlashStringHelper*err) {
+//    Serial.println(err);
+//    while (1);
+//  }
+
+  //-----------------------------------   
+#elif defined TDK_USSM_Lab_Board
+  //-----------------------------------
+  #include  <SPI.h>
+  #define   BOARD_NAME            "Lab_Board"
+  #define   BOARD_VERSION         "20210403"
+  #define   BOARD_FIRMWARE        COMMN_FIRMWARE_VERSION // Use common Firmware Version
+  #define   N_SENSORS             8+2  // 8 Normal Sensors + 2 Aux Sensors
+
+  const int PullupPin[N_SENSORS]  = {PF12, PF12, PF12, PF12, PF13, PF13, PF13, PF13,   PF13, PF13}; // Trigger Pin of Ultrasonic Sensor
+  const int LinEnPin[N_SENSORS]   = {PG13, PG13, PG13, PG13, PG8 , PG8 , PG8 , PG8 ,   PG8 , PG8 }; // Trigger Pin of Ultrasonic Sensor
+  const int LinFaultPin[N_SENSORS]= {PC13, PC13, PC13, PC13, PG9 , PG9 , PG9 , PG9 ,   PG9 , PG9 }; // Trigger Pin of Ultrasonic Sensor
+
+  #define  SENSOR_TYPES           3
+  const int SensorType[N_SENSORS] = {33 ,  33 ,  33 ,  33 ,  33 ,  33 ,  33 ,  33 ,    HC_SR04, JSN_SR04T_V3}; // Echo Pin of Auxilary Ultrasonic Sensor
+  const int TriggerPin[N_SENSORS] = {PD0,  PD1,  PD2,  PD3,  PD4,  PD5,  PD6,  PD7 ,   PB0 , PF11 }; // Trigger Pin of Ultrasonic Sensor
+  const int EchoPin[N_SENSORS]    = {PG0,  PG1,  PG2,  PG3,  PG4,  PG5,  PG6,  PG7 ,   PB1 , PE15 }; // Echo Pin of Ultrasonic Sensor. Could same as Trigger pin if a bidir level shifter is used
+  const int AnaPin[N_SENSORS]     = {PF3,  PF4,  PF5,  PF6,  PF7,  PF8,  PF9,  PF10,   PB1 , PE15 }; // Analog IO Pin used for envelop over IO
+  const int ProgPin[N_SENSORS]    = {PC8,  PC8,  PC8,  PC8,  PC8,  PC8,  PC8,  PC8 ,   PC8 , PC8  }; // Eeprom PRogramming Pin
+  const int TimerInPin[N_SENSORS] = {PA0,  PA1,  PA2,  PA3,  PA15, PB3,  PB10, PB11,   PB11, PB11 }; // Timer In Pins of Ultrasonic Sensor
+  const int TimerAuxPin[N_SENSORS]= {PC11, PC7,  PE7,  PE0,  PD12, PD13, PD14, PD15,   PD15, PD15 }; // Auxilary shared Timer In Pins of Ultrasonic Sensor
+
+  void Board_LabBoardDiagnosis(int sel);
+ 
+
+  //-- Power Control
+    #define N_POWER             4
+    
+    #define	EN_3V3_EXT			    PE6   //  
+    #define	EN_12V				      PF14  //  
+    #define	EN_24V				      PF15  //  
+    #define	PROG_DIAG		        PC12  // 
+    
+    #define	FB_3V3_EXT			    PF2   // 
+    #define	FB_12V				      PF1   // 
+    #define	FB_24V				      PF0   //  	  
+    #define	PROG_FAULT			    PD10  //     
+    
+  const int PowerEnPin[N_POWER]     = {EN_3V3_EXT, EN_12V, EN_24V, PROG_DIAG };
+  const int PowerStatusPin[N_POWER] = {FB_3V3_EXT, FB_12V, FB_24V, PROG_FAULT};
+
+  //-- Buzzer
+  #define  BUZZER               PC9
+  
+  //-- LEDs
+    #define   N_LED                 4
+  const int Leds[N_LED]           = {PE9, PE10, PB4, PE13}; // R, G, Y, Y
+  const int SYS_LED               = PE9;
+  
+  //-- Serial Com Port
+  HardwareSerial Serial1(PA10, PA9); // Rx=PA10, Tx=PA9
+  #define    PC_Serial            Serial1
+  #define    SoftwareReset()      HAL_NVIC_SystemReset()
+  
+  #define     ANA_BUF_SIZE        512
+  #define     ANA_BUF_SIZE_TOTAL  (ANA_BUF_SIZE*N_SENSORS)  
+  #define     WAVE_BUFF_SIZE      1024
+  #define     COM_BUF_SIZE        256
+
+  #define     IO_DRIVE_LOW        LOW
+  #define     IO_RELEASE          HIGH 
+  #define     IO_IN_MODE          INPUT_PULLUP  // INPUT
+
+  #define     PROG_ENABLE         HIGH
+  #define     PROG_DISABLE        LOW
+
+  //--------- JTAG interfaces
+    //-- !! IMPORTANT Notice: Due to hardwireing of JTAG at least SPI1 + SPI2 shall be used to insure JTAG protocol.
+    //-- SPI1  : Used as JTAG0 in Master-Mode
+    #define SPI1_NSS				PA4    // !! Shared Pin Exclusively with DRIVE_DAC_OUT (DAC_1)
+    #define SPI1_SCK				PA5
+    #define SPI1_MISO				PA6
+    #define SPI1_MOSI				PA7		// Drives JTAG_TMS (during CR and DR transcations)
+    
+    //-- SPI2  : Used as JTAG1 in Slave-Mode
+    #define SPI2_NSS				PB12
+    #define SPI2_SCK				PB13
+    #define SPI2_MISO				PB14		// Drives JTAG_TDI (during CR setup)
+    #define SPI2_MOSI				PB15
+    
+    //-- SPI3  : Used as JTAG2 in Slave-Mode
+    #define SPI3_NSS				PA15 //_ALT0	// !! Shared Pin Exclusively with TIM2_CH1
+    #define SPI3_SCK				PB3  //_ALT0	// !! Shared Pin Exclusively with TIM2_CH2
+    #define SPI3_MISO				PB4  //_ALT0	// ==> Not used LED3 instead
+    #define SPI3_MOSI				PB5  //_ALT0
+    
+    //-- SPI4  : Used as JTAG3 in Slave-Mode
+    #define SPI4_NSS				PE11
+    #define SPI4_SCK				PE12
+    #define SPI4_MISO				PE13		// ==> Not used LED4 instead
+    #define SPI4_MOSI				PE14
+    
+    /*--- MCU Hardware SPI-DMA map ----
+        Function	Module		Mode			AltFunc			Timer1				RX-DMA-Channel  		TX-DMA-Channel
+        JTAG0			SPI1			Master		AF5_SPI1		TIM5_CH1_IC		DMA2_CH3_Stream2    DMA2_CH3_Stream3								
+        JTAG1			SPI2			Slave			AF5_SPI2		TIM5_CH2_IC		DMA1_CH0_Stream3		DMA1_CH0_Stream4	   								
+        JTAG2			SPI3			Slave  		AF6_SPI3		TIM6_CH3_IC		DMA1_CH0_Stream0		DMA1_CH0_Stream7		 								
+        JTAG3			SPI4			Slave			AF5_SPI4		TIM5_CH4_IC		DMA2_CH5_Stream3    DMA2_CH5_Stream5		 										
+    */	
+
+  #define JTAG_BUF_MAX_SIZE     1024*4  
+  #define JTAG_N_PORT           4
+  const int JtagTmenPin[JTAG_N_PORT] = {PG15     , PG15     , PG15     , PG15     }; // Test Mode Enable Active high
+  const int JtagTckPin[JTAG_N_PORT]  = {SPI1_SCK ,  SPI1_SCK, SPI1_SCK , SPI1_SCK }; // Send on Falling Edge, Capture on Rising edge
+  const int JtagTmsPin[JTAG_N_PORT]  = {SPI1_MOSI, SPI1_MOSI, SPI1_MOSI, SPI1_MOSI}; // TMS active high 
+  const int JtagTdiPin[JTAG_N_PORT]  = {SPI2_MISO, SPI2_MISO, SPI2_MISO, SPI2_MISO}; // From Board to Sensor   -- Miso1 Shared
+  const int JtagTdoPin[JTAG_N_PORT]  = {SPI1_MISO, SPI2_MOSI, SPI3_MOSI, SPI4_MOSI}; // From Sensors to Board  -- Miso1 Shared
+
+  //-----------------------------------   
+#elif defined TDK_USSM_Demo_Board
+  //-----------------------------------
+  #include  <SPI.h>
+    
+  #define   BOARD_NAME            "TDK_USSM_Demo_Board"
+  #define   BOARD_VERSION         "20210623"
+  #define   BOARD_FIRMWARE        COMMN_FIRMWARE_VERSION // Use common Firmware Version
+  #define   N_SENSORS             2
+
+  const int TriggerPin[N_SENSORS] = {PB3, PB4}; // Trigger Pin of Ultrasonic Sensor
+  const int EchoPin[N_SENSORS]    = {PA1, PA3}; // Echo Pin of Ultrasonic Sensor. Could same as Trigger pin if a bidir level shifter is used
+  const int AnaPin[N_SENSORS]     = {PB0, PB1}; // Analog IO Pin used for envelop over IO
+  const int ProgPin[N_SENSORS]    = {PB5, PB5}; // Eeprom PRogramming Pin
+  const int SYS_LED               = PC14; 
+  
+  HardwareSerial Serial1(PA10, PA9); // Rx=PA10, Tx=PA9
+  #define    PC_Serial            Serial1
+
+  //-- HAL Section
+  #define           _HAL_DMA_BUF_SIZE  256   
+  uint32_t          _hal_dma_buf[_HAL_DMA_BUF_SIZE];
+  int               _hal_n_channels = 2;
+  uint32_t          _hal_timer_freq_Mhz = 40;
+
+  ADC_HandleTypeDef hadc1;
+  TIM_HandleTypeDef htim2;
+  DMA_HandleTypeDef hdma_adc1;
+  DMA_HandleTypeDef hdma_tim2_ch2_ch4;
+
+  void        _hal_clock_init(void);
+  void        _hal_adc_init(void);
+  inline void _hal_adc_start(void);
+  inline void _hal_adc_stop(void);  
+  inline int  _hal_adc_get_value(int index);      
+  void              _hal_timer_init(void); 
+  inline uint32_t   _hal_timer_start(int mask);
+  inline void       _hal_timer_stop(); 
+
+  #define    Board_AnalogStart()  _hal_adc_start()
+  #define    Board_AnalogRead(d)  _hal_adc_get_value(d)
+  #define    Board_AnalogStop()   _hal_adc_stop()
+  #define    Board_TimerStart(d)  _hal_timer_start(d)
+  #define    Board_TimerStop()    _hal_timer_stop()
+
+  #define    SoftwareReset()      HAL_NVIC_SystemReset()    
+  void       Board_DemoBoardDiagnosis(int sel);
+  //-- End of HAL Section
+  
+  #define     ANA_BUF_SIZE        512
+  #define     ANA_BUF_SIZE_TOTAL  (ANA_BUF_SIZE*N_SENSORS)  
+  #define     WAVE_BUFF_SIZE      1024
+  #define     TX_WAVE_BUFF_SIZE   256
+  #define     COM_BUF_SIZE        256
+
+  #define     IO_DRIVE_LOW        LOW
+  #define     IO_RELEASE          HIGH 
+  #define     IO_IN_MODE          INPUT_PULLUP  // INPUT
+
+  #define     PROG_ENABLE         HIGH
+  #define     PROG_DISABLE        LOW
+
+  //--------- JTAG interfaces
+  //-- SPI0  : Used as JTAG0 in Master-Mode
+  #define SPI1_NSS              PA4    
+  #define SPI1_SCK              PA5
+  #define SPI1_MISO             PA6
+  #define SPI1_MOSI             PA7    // Drives JTAG_TMS (during CR and DR transcations)
+  
+  //-- SPI1  : Used as JTAG1 in Master-Mode with MISO remapped
+  #define SPI2_NSS              SPI1_NSS
+  #define SPI2_SCK              SPI1_SCK
+  #define SPI2_MISO             PA11   
+  #define SPI2_MOSI             SPI1_MOSI
+
+  #define JTAG_BUF_MAX_SIZE     1024*2  
+  #define JTAG_N_PORT           2
+  const int JtagTmenPin[JTAG_N_PORT] = {SPI1_NSS,  SPI1_NSS }; // Test Mode Enable Active high
+  const int JtagTckPin[JTAG_N_PORT]  = {SPI1_SCK,  SPI1_SCK }; // Send on Falling Edge, Capture on Rising edge
+  const int JtagTmsPin[JTAG_N_PORT]  = {SPI1_MOSI, SPI1_MOSI}; // TMS active high 
+  const int JtagTdiPin[JTAG_N_PORT]  = {SPI1_MISO, SPI1_MISO}; // From Board to Sensor   -- Miso1 Shared
+  const int JtagTdoPin[JTAG_N_PORT]  = {SPI1_MISO, SPI2_MISO}; // From Sensors to Board  -- Miso1 Shared
+
+ 
+  //-----------------------------------
+#else
+  #error "Define a Target Board ... !!"
+#endif
+
+
+  //---- End of Board Hardware Map ----
+
+#define     ALL_SENSORS     ((1<<N_SENSORS)-1)
+#define     ComServer_Print(s)   PC_Serial.print(s)    // Macro for print-out
+#define     ComServer_Println(s) PC_Serial.println(s)  // Macro for print-out
+#define     ComServer_Writable() PC_Serial.availableForWrite() // Macro for Writable
+#define     ComServer_SetBaudrate(bv) PC_Serial.begin(bv)      // Macro for baudrate change
+#define     Float2Str(f,s)       dtostrf(f, 4, 3, s)
+#ifndef  Board_AnalogStart
+  void Board_AnalogStart() {}
+#endif
+#ifndef  Board_AnalogRead
+  #define    Board_AnalogRead(d)  (analogRead(anaPin[d])>>2) // 10 bit to 8 bit
+#endif
+#ifndef  Board_AnalogStop
+  void Board_AnalogStop()  {}
+#endif
+#ifndef  Board_TimerStart
+  uint32_t Board_TimerStart(int d)  { return 0; }
+#endif
+#ifndef  Board_TimerStop
+  void Board_TimerStop()  {}
+#endif
+
+
+long        Offset_mm       = 80;  // default sensor offset in mm
+long        StreamDelay_ms  = DEFAULT_STREAM_DELAY_US/1000;
+
+//-------------------------------------------
+//  Application Parameters
+//-------------------------------------------
+
+uint32_t            _tx_buf_ptr;
+RxWaveStruct_t      _tx_buf[WAVE_BUFF_SIZE];
+uint32_t            _rx_buf_ptr;
+RxWaveStruct_t      _rx_buf[WAVE_BUFF_SIZE];
+eSensorData         _data[N_SENSORS];
+
+bool                ComRxDone = false;
+int                 ComRxPtr;
+char                Com_rx_buf[COM_BUF_SIZE];
+
+eTdkUssmCmdExecStruct   ActiveCmd;
+
+//-------------------------------------------
+//  Functions Prototypes Declration
+//-------------------------------------------
+//-- Board Function
+void Board_Init(void);
+void Board_Reset(void);
+void Board_PrintHardwareId(void);
+void Board_RunDiagnosis(const char *cmdStr);
+void Board_JumpToBootloader(uint32_t password);
+
+//-- Com Server (CLI) Functions
+void ComServer_PrintHelp(void);
+void ComServer_PrintDistance(int deviceMask=0xff);
+void ComServer_RunDiagnosis(const char *cmdStr);
+
+void ComServer_PrintFutureRelease(eTdkUssmCmdExecStruct *pCmd, const char *relName);
+void ComServer_PrintEchos(eTdkUssmCmdExecStruct *pCmd, int maxEchos=3);
+void ComServer_PrintCalPulse(eTdkUssmCmdExecStruct *pCmd);
+void ComServer_RunPollingIteration(eTdkUssmPolStruct *pPolCmd);
+void ComServer_PrintEnvelop(eTdkUssmCmdExecStruct *pCmd);          
+void ComServer_PrintJtagEnvelop(eTdkUssmCmdExecStruct *pCmd);   
+void ComServer_ProgramSensors(eTdkUssmCmdExecStruct *pCmd);
+void ComServer_RegisterReadWrite(eTdkUssmCmdExecStruct *pCmd, int printMask=0);  
+void ComServer_SoftParamsReadWrite(eTdkUssmCmdExecStruct *pCmd, const char *cmdStr);   
+void ComServer_SetGetParam(eTdkUssmCmdExecStruct *pCmd);
+void ComServer_PrintWaveform(eTdkUssmCmdExecStruct *pCmd, int offset=-1, const char *configStr="r", const char *altCmdName="");
+void ComServer_ResetPollCmd(eTdkUssmCmdExecStruct *pCmd);
+void ComServer_PrintStreamoutAck(eTdkUssmCmdExecStruct *pCmd);
+
+//-- Sensor Functions
+long TdkUssm_WaveGenCapture(eTdkUssmCmdExecStruct *pCmd, const int *txPin, const int *rxPin, int *txBits, 
+                            int nTxBits=0, int *rxBits=NULL, int nRxBits=0, const int *progPin=NULL, 
+                            const int *anaPin=NULL, uint8_t *anaBuf=NULL);
+long TdkUssm_EepromProgram (const int txPin, const int rxPin, const int progPin, const int cmdId);
+long TdkUssm_DecodeRxWave  (const int cmdId, const int devideId, const int rxBitId, uint32_t dmaMask=0ul);
+int  TdkUssm_SaveData      (const int cmdId, const int devideId);
+long TdkUssm_GetTimeOfFlight(const int txPin, const int rxPin, int cmd_id=CMD_SEND_A);
+long TdkUssm_RegisterRead  (const int txPin, const int rxPin, const int cmdId, uint8_t *rxBytes, int nRxBits);
+long TdkUssm_RegisterWrite (const int txPin, const int rxPin, const int cmdId, uint8_t *txBytes, int nTxBits);
+
+
+//-- Helper Functions
+void      TdkUssm_InitSensorData(void);
+long      TdkUssm_GetDistances(const int cmdId, const int sensorId, const int bitId, uint32_t dmaMask=0ul);
+eIOState  TdkUssm_GetIoState(RxWaveStruct_t *pwave, uint32_t pos, uint8_t device_id);
+int       TdkUssm_GetBit(uint8_t *buf, uint32_t bit_id);
+int       TdkUssm_SetBit(uint8_t *buf, uint32_t bit_id, int val);
+uint32_t  TdkUssm_GetBitsU32(uint8_t *src, uint32_t src_lsb, uint32_t nbit);
+uint32_t  TdkUssm_SetBitsU32(uint8_t *dest, uint32_t dest_lsb, uint32_t nbit, uint32_t val32);
+int       TdkUssm_GetBitRange(uint8_t *dest, uint32_t dest_lsb, uint8_t *src, uint32_t src_lsb, uint32_t nbit);
+uint32_t  TdkUssm_GetBitsNbyte(uint32_t nbits);
+int       TdkUssm_GetParityBits(int cmd_id);
+int       TdkUssm_GetEvenParity(uint8_t *pbuf, uint32_t lsb, uint32_t msb);
+bool      TdkUssm_GetValOfRealVal(const eLUTStruct *pLut, uint32_t *pVal, float real_val);
+bool      TdkUssm_GetRealValOfVal(const eLUTStruct *pLut, float *pRealVal, uint32_t val, char *pDesc);
+int       TdkUssm_EvalParity(int cmd_id, uint8_t *src, uint8_t *dest);
+int       TdkUssm_IsSendReceiveCommand(const int cmd_id);
+int       TdkUssm_IsSendReceiveA(const int cmd_id);
+bool      TdkUssm_IsValidCmd(char *cmdStr);
+
+
+void      TdkUssm_JtagReset(int tckPin, int tmsPin);
+void      TdkUssm_JtagSetup(int mode, int tckPin, int tmsPin, int tdiPin);
+uint32_t  TdkUssm_JtagCaptureSPI(int mosiPin, int misoPin, int sckPin, int nSample, int delay_us, uint8_t *pBuf, int nBit=16, int rxPin=NC);
+uint32_t  TdkUssm_JtagCaptureSPIDummy(int mosiPin, int misoPin, int sckPin, int nSample, int delay_us, uint8_t *pBuf, int nBit=16, int rxPin=NC);
+uint32_t  TdkUssm_JtagCaptureEnvelop(eTdkUssmCmdExecStruct *pCmd , int mode, uint8_t *pBuf);
+
+bool      TdkUssm_GetParamElementIds(const char *pName, uint8_t *table_id, uint8_t *elem_id, uint32_t *lsb, uint8_t *nbit, uint32_t *reset_val);
+bool      TdkUssm_GetParamVal(const char *pName, uint32_t *pVal, char *pReg);
+bool      TdkUssm_SetParamVal(const char *pName, uint32_t val, char *pReg);
+const eTdkUssmCmdStruct *TdkUssm_GetCommandByIds(unsigned char CmdId);
+const char** TdkUssm_GetCommandSequence(unsigned char CmdId);
+uint32_t  TdkUssm_SequenceCheckDone(int deviceId, const char *chekStr, char *respStr);
+
+long      TdkUssm_MicrosecondsToInches(long microseconds);
+long      TdkUssm_MicrosecondsToMillimeters(long microseconds);
+long      TdkUssm_MicrosecondsToCentimeters(long microseconds);
+
+//-------------------------------------------
+//  Setup
+//-------------------------------------------
+void setup() {
+   //-- Init Hardware 
+   Board_Init();
+   
+   //-- Application Specific Init
+   ActiveCmd.state=ELM_REQ_NONE; // No command ogoing
+   ComRxPtr = 0;
+   TdkUssm_InitSensorData();
+
+}
+
+//-------------------------------------------
+// Loop
+//-------------------------------------------
+void loop() {
+  
+  #ifndef SMALL_FOOTPRINT
+    ComServer_Listen();
+  if(ComRxDone) {
+    if(! ComServer_ParseCommand(&ActiveCmd, Com_rx_buf, false)){
+      ComServer_Println();
+      ComServer_Println(C_TDK_USSM_CMD[TDK_USSM_N_CMD-1].name); // Report Invalid Command Status;
+    }
+    if(ActiveCmd.state == ELM_REQ_NONE) {
+      ComServer_Println(COM_RESPONSE_TERMINATOR);
+    }
+  } else {
+    ComServer_RunPollingIteration(&ActiveCmd);
+  }
+  #else
+    ComServer_PrintDistance();
+    delay(StreamDelay_ms);
+  #endif
+
+}
+
+
+//-------------------------------------------
+// Time-of-Flight to Distance Conversion
+//-------------------------------------------
+long TdkUssm_MicrosecondsToInches(long microseconds) {
+   return microseconds / 74 / 2;
+}
+
+long TdkUssm_MicrosecondsToMillimeters(long microseconds) {
+   return (microseconds*5) / 29; // us * 10 /29/2 => us *5 /29
+}
+
+long TdkUssm_MicrosecondsToCentimeters(long microseconds) {
+   return microseconds/29/2; 
+}
+//-------------------------------------------
+// Serial Com Server 
+// CLI Interface
+//-------------------------------------------
+bool ComServer_Listen(void){
+  int rd_val;
+  
+  if(ComRxDone) return true;
+  
+  while(PC_Serial.available() > 0) {
+    rd_val = PC_Serial.read();
+    if(rd_val == COM_REQUEST_TERMINATOR){
+      ComRxDone = true;
+      Com_rx_buf[ComRxPtr++] = '\0'; // Add String Terminator
+      return true;
+    } else {
+      Com_rx_buf[ComRxPtr++] = (char)rd_val;
+    }
+  }
+  
+  return false;
+}
+
+//-------------------------------------------
+// COM Server : Parse Command
+//-------------------------------------------
+bool ComServer_ParseCommand(eTdkUssmCmdExecStruct *pCmd, const char *cmdStr, bool echoCommand){
+  char str[256]="", str1[32]="";
+  int nelem = 0;
+  int ai=0, bi=0, bv=0;
+  
+  //-- Echo back for test
+  if(echoCommand) {
+    ComServer_Print(cmdStr);
+    ComServer_Println(COM_REQUEST_TERMINATOR);
+  }
+  ComRxPtr  = 0;
+  ComRxDone = false;
+
+  //-- Parse Commands
+  nelem =  strlen(cmdStr);
+  
+  //-- Add some tolerances to the command by removing leading spaces
+  while((isspace(*cmdStr)) && (nelem>0)) {
+    cmdStr++;
+    nelem--;
+  }
+  
+  if (strlen(cmdStr) < 3) {
+    return false;
+  }
+
+  //-- Sensor Services
+  for (int i = 0; i < TDK_USSM_N_CMD; i++)
+  {
+    if (!strncmp(C_TDK_USSM_CMD[i].cmd, cmdStr, 3))
+    {
+      pCmd->pdef = &C_TDK_USSM_CMD[i];
+      ComServer_Println(""); // Acknowledge Valid Command
+      
+     //-- Init Parameters Default Values 
+      pCmd->masters        = C_SOFT_PARAM[MASTER_MASK].val;
+      pCmd->n_sample       = C_SOFT_PARAM[N_SAMPLE].val;
+      pCmd->sample_time_us = C_SOFT_PARAM[SAMPLE_TIME].val;
+
+      //-- Get Args start position
+      ai=0;
+      while((!isspace(cmdStr[ai]))&&(cmdStr[ai] != '\0')) ai++;
+
+      //-- Get Active Devices
+      if(!strncmp(&cmdStr[3],"[0x",3)) { // Mask mode
+         nelem = sscanf(&cmdStr[6], "%x", &pCmd->devices);
+      } else if(cmdStr[3]=='['){ // Simple index mode
+         nelem = sscanf(&cmdStr[4], "%d", &pCmd->devices);
+         pCmd->devices = 1<<pCmd->devices; // Update 
+      } else if(pCmd->state == ELM_REQ_SEQUENCE) {
+        pCmd->devices = pCmd->seq_devices;
+      } else {
+        pCmd->devices =  C_SOFT_PARAM[DEVICE_EN].val; 
+      }
+       
+      //-- Parse command line
+      switch (pCmd->pdef->id)
+      {
+      case CMD_HARDWARE_ID:
+        Board_PrintHardwareId();
+        break;
+ 
+      case CMD_DIAGNOSIS:
+        Board_RunDiagnosis(cmdStr);
+        break;  
+        
+      case CMD_RESET: 
+        Board_Reset();
+        break;
+        
+      case CMD_UPDATE_FIRMWARE:
+        bv = 0;
+        nelem = sscanf(cmdStr,"%s %x",str, &bv);
+        Board_JumpToBootloader(bv);
+        break;
+               
+      case CMD_HELP:  
+        ComServer_PrintHelp();
+        break;
+
+      case CMD_COM_BAUDRATE:     
+        bv = C_SOFT_PARAM[BAUDRATE].val; // default
+        nelem = sscanf(cmdStr,"%s %d",str, &bv);
+        if(nelem>=2) {
+          ComServer_SetBaudrate(bv);
+        }
+        break;
+
+     //-- Soft Params
+      case CMD_SOFT_PARAM_WRITE:
+      case CMD_SOFT_PARAM_READ:
+        ComServer_SoftParamsReadWrite(pCmd, cmdStr);
+        break;
+
+     //-- Sensor Send/Receive     
+      case CMD_SEND_A:
+      case CMD_SEND_B:
+      case CMD_SEND_C:
+      case CMD_RECEIVE_A:
+      case CMD_RECEIVE_B:
+      case CMD_RECEIVE_C:
+        nelem = sscanf(cmdStr, "%s %s", str, pCmd->cmd_str);
+        ComServer_PrintEchos(pCmd);
+        break;
+        
+      case CMD_SEND_RECEIVE_A:
+      case CMD_SEND_RECEIVE_B:
+      case CMD_SEND_RECEIVE_C:
+      case CMD_SEND_RECEIVE_AH:
+        nelem = sscanf(cmdStr, "%s %s %s", str, str1, pCmd->cmd_str);
+        if(NULL != strchr(str1,'x')) {
+          sscanf(str1, "0x%x", &pCmd->masters);
+        } else {
+          sscanf(str1, "%d", &bv);
+          pCmd->masters = 1<<bv;
+        }
+        ComServer_PrintEchos(pCmd);
+        break;
+
+      case CMD_JTAG_SEND_RECEIVE: 
+      case CMD_JTAG_THRESH_READ:
+      case CMD_JTAG_ENVTHRES_READ:
+        nelem = sscanf(cmdStr, "%s %d %s", str, &pCmd->n_sample, &pCmd->sample_time_us, str1);
+        if(NULL != strchr(str1,'x')) {
+          sscanf(str1, "0x%x", &pCmd->masters);
+        } else {
+          sscanf(str1, "%d", &bv);
+          pCmd->masters = 1<<bv;
+        }
+        ComServer_PrintJtagEnvelop(pCmd);
+        break;
+
+      case CMD_JTAG_SEND_A:   
+      case CMD_JTAG_RECEIVE_A:
+        nelem = sscanf(cmdStr, "%s %d %d", str, &pCmd->n_sample, &pCmd->sample_time_us);
+        ComServer_PrintJtagEnvelop(pCmd);
+        break;
+        
+      case CMD_ENV_SEND_A:
+      case CMD_ENV_RECEIVE_A:
+        nelem = sscanf(cmdStr, "%s %d %d", str, &pCmd->n_sample, &pCmd->sample_time_us);
+        ComServer_PrintEnvelop(pCmd);
+        break;
+              
+      case CMD_ENV_SEND_RECEIVE:
+        nelem = sscanf(cmdStr, "%s %d %d %s", str, &pCmd->n_sample, &pCmd->sample_time_us, str1);
+        if(NULL != strchr(str1,'x')) {
+          sscanf(str1, "0x%x", &pCmd->masters);
+        } else {
+          sscanf(str1, "%d", &bv);
+          pCmd->masters = 1<<bv;
+        }
+        ComServer_PrintEnvelop(pCmd);
+        break;
+
+      case CMD_EE_COPY: 
+        ComServer_ProgramSensors(pCmd);
+        break;
+        
+      case CMD_CAL_PULSE: 
+        nelem = sscanf(cmdStr, "%s %s", str, pCmd->cmd_str);
+        ComServer_PrintCalPulse(pCmd);
+        break;
+
+      //-- Parameters (Register fields) Set/Get
+      case CMD_SET: 
+      case CMD_GET:
+        strcpy((char*)pCmd->args,cmdStr); // Copy raw command string to args
+        ComServer_SetGetParam(pCmd);
+        break;
+
+      //-- RX Wave
+      case CMD_RX_WAVE:
+        bv=C_SOFT_PARAM[RX_WAVE_OFFSET].val; // offset
+        strcpy(str1,"r"); // by default Rx Only
+        nelem = sscanf(cmdStr, "%s %d %s", str, &bv, str1); 
+        ComServer_PrintWaveform(pCmd, bv, str1);
+        break;
+  
+      //-- Sequences
+      case CMD_CAL_OSCILLATOR:
+      case CMD_CAL_FDRV: 
+      case CMD_CAL_GAIN: 
+      case CMD_READ_ALL: 
+        ComServer_ResetPollCmd(pCmd);
+        pCmd->seq_devices = pCmd->devices; 
+        pCmd->iterations = C_SOFT_PARAM[SEQ_ITERATION].val; // Will be stopped by "end" command part of the sequence
+        pCmd->state = ELM_REQ_SEQUENCE;
+        strcpy(pCmd->cmd_str, cmdStr); 
+        pCmd->pseq = TdkUssm_GetCommandSequence(pCmd->pdef->id);
+        break; 
+
+      //-- Sequences
+      case CMD_STREAMOUT:
+        ComServer_ResetPollCmd(pCmd);
+        pCmd->state = ELM_REQ_STREAMOUT;
+        bv = CMD_SEND_A; // default command
+        pCmd->iterations = 0;
+        pCmd->iterations |= C_SOFT_PARAM[MAX_ITERATION].val; // continuous streaming
+        pCmd->delay_ms   = StreamDelay_ms;
+        nelem = sscanf(cmdStr, "%s %d %d %d", str, &pCmd->iterations, &pCmd->delay_ms, &bv);
+        pCmd->args[0] = bv;
+        ComServer_PrintStreamoutAck(pCmd);
+        break;
+
+      case CMD_POLL:    
+        ComServer_ResetPollCmd(pCmd);
+        pCmd->state = ELM_REQ_POLL;
+        nelem = sscanf(cmdStr, "%s %d %d %s", str, &pCmd->iterations, &pCmd->delay_ms, pCmd->cmd_str);
+        break;   
+        
+      case CMD_END:
+        ComServer_ResetPollCmd(pCmd);
+        break;     
+
+        
+      //-- Low level registers operation
+      default: // Other low-level commands
+        memset(pCmd->args, 0, 64);
+        //-- Extract data
+        pCmd->masters = pCmd->devices;
+        pCmd->n_arg = 0;
+        bi = TdkUssm_GetBitsNbyte(pCmd->pdef->tx_bits);
+        ai=0;
+        while((!isspace(cmdStr[ai]))&&(cmdStr[ai] != '\0')) ai++;
+        for (int i=ai; i<strlen(cmdStr); i++)
+        {
+          if (!isspace(cmdStr[i])) { // empty space delimiter
+            nelem = sscanf(&cmdStr[i], "%x", &bv); // For Scanf we need int
+            if((nelem>0) && (bi>0)) { // Tx mode values
+              bi--;
+              pCmd->args[bi] = bv;
+              pCmd->n_arg++;
+            } else { // Rx Mode parameters
+              pCmd->args[pCmd->n_arg] = bv;
+              pCmd->n_arg++;
+            }
+            //-- Skipp till next value found
+            while((!isspace(cmdStr[i]))&&(cmdStr[i] != '\0')) i++;
+          }
+        }
+        //-- Perform Sensor Register Read or Write
+        if((pCmd->n_arg*8) >= pCmd->pdef->tx_bits) {
+          ComServer_RegisterReadWrite(pCmd,  pCmd->args[0]);
+        } else {
+          return false; // Incomplete command ==> Invalid command
+        }
+        break;
+      } // end switch(_cmd.id)
+      //-- Report parsed values for debug
+//      sprintf(str,"%s[%x,%x]", pCmd->pdef->name, pCmd->devices, pCmd->masters);
+//      ComServer_Println(str);
+      return true;
+    } // end valid command found
+  }
+
+  //-- Return Status of Execution
+  return false;
+}
+
+//=================[ BOARD ]=================
+
+void Board_Init(void){
+   pinMode(SYS_LED, OUTPUT);
+   digitalWrite(SYS_LED, 0);
+   PC_Serial.begin(115200); // Starting Serial Terminal
+   delay(100);
+    
+#if defined  TDK_USSM_Lab_Board
+    //-- Power Cycling to reset remote devices: OFF Then ON
+    pinMode(EN_12V, OUTPUT);      digitalWrite(EN_12V, 1); // Disable
+    pinMode(EN_24V, OUTPUT);      digitalWrite(EN_24V, 1); // Disable
+    pinMode(EN_3V3_EXT, OUTPUT);  digitalWrite(EN_3V3_EXT, 0); // Disable
+    delay(250); // Wait full reset
+    pinMode(EN_12V, INPUT); // Enable
+    pinMode(EN_24V, INPUT); // Enable
+    digitalWrite(EN_3V3_EXT, 1); // Enable       
+    
+    //-- DIO Enable & Setup
+    for(int i=0; i< N_SENSORS; i++){
+        pinMode(TimerInPin[i], INPUT_PULLUP);       
+        pinMode(TimerAuxPin[i], INPUT_PULLUP);       
+        pinMode(LinFaultPin[i], INPUT_PULLUP);   
+    }
+     
+    for(int i=0; i< N_SENSORS; i++){
+        pinMode(ProgPin[i],    OUTPUT);         digitalWrite(ProgPin[i], 0); // Disabled
+        pinMode(PullupPin[i] , OUTPUT);         digitalWrite(PullupPin[i], 1); // Enabled
+        pinMode(TriggerPin[i], OUTPUT);         digitalWrite(TriggerPin[i], 1); // Enabled
+        pinMode(LinEnPin[i]  , OUTPUT);         digitalWrite(LinEnPin[i], 1); // Enabled
+    } 
+       
+    //-- Buzzer
+    pinMode(BUZZER, OUTPUT);     digitalWrite(BUZZER, 0); // Disabled
+    
+#elif defined  TDK_USSM_Demo_Board
+    Board_DemoBoardDiagnosis(0);  // Main peripherals Init
+#elif defined  ADAFRUIT_FEATHER_32U4
+    Board_AdaFruitBLE_Setup();
+#else
+#endif
+
+   digitalWrite(SYS_LED, 1);
+   Board_PrintHardwareId();
+}
+
+//-------------------------------------------
+// Board : Print ID + Hardware & Firmware versions
+//-------------------------------------------
+void Board_PrintHardwareId(void){
+  char str[256];
+  sprintf(str,"%s -- Hardware : %s -- Firmware : %s ",BOARD_NAME , BOARD_VERSION,  BOARD_FIRMWARE);
+  ComServer_Println(str);
+}
+
+//-------------------------------------------
+// Board : Run Diagnosis Function
+//-------------------------------------------
+void Board_RunDiagnosis(const char *cmdStr) {
+  char str[256]=""; 
+  int start_step=0;
+  int end_step=0;
+  int delay_ms=200;
+  int iterations=0;
+  sscanf(cmdStr,"%s %d %d %d %d", str, &start_step, &end_step, &delay_ms, &iterations);
+  if(start_step > end_step) return;
+  for(int cnt=0; cnt<iterations; cnt++) {
+    sprintf(str,"%s.DIAG[%d] = { ", BOARD_NAME, cnt);
+    ComServer_Println(str);
+    for (int i=start_step; i<=end_step; i++) {
+      #if defined TDK_USSM_Lab_Board
+        Board_LabBoardDiagnosis(i);
+      #elif defined TDK_USSM_Demo_Board
+         Board_DemoBoardDiagnosis(i);
+      #else
+      #endif
+      delay(delay_ms);
+    }
+    ComServer_Println("}");
+  }
+}
+
+
+//-------------------------------------------
+// Board : Reset Device
+//-------------------------------------------
+void Board_Reset(void){
+  char str[128];
+  sprintf(str,"%s.Reset = { 1 }", BOARD_NAME);
+  ComServer_Println(str);
+  ComServer_Println(COM_RESPONSE_TERMINATOR);
+  delay(250); // Wait until message tansmitted
+  SoftwareReset();
+}
+
+//-------------------------------------------
+// COM Server : Print Future Release Version
+//-------------------------------------------
+void ComServer_PrintFutureRelease(eTdkUssmCmdExecStruct *pCmd, const char *relName){
+  char str[256];
+  
+  for(int d=0; d<N_SENSORS; d++){
+    if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+      sprintf(str,"TdkUssm[%d].%s.AvailableFrom = { %s }", d,  pCmd->pdef->name, relName);
+      ComServer_Println(str);
+    }
+  }
+}
+
+
+//-------------------------------------------
+// COM Server : Soft Params Read/Write
+//-------------------------------------------
+void ComServer_SoftParamsReadWrite(eTdkUssmCmdExecStruct *pCmd, const char *cmdStr) {
+  char str[256], cmdName[5]="";
+  uint8_t val8[4];
+  int nelem, ai=0, bi=0, pi=0, bv=0;
+  uint32_t val32=0;
+  
+  //-- Command name
+  strncpy(cmdName, cmdStr, 3);
+  while((!isspace(cmdStr[ai]))&&(cmdStr[ai] != '\0')) ai++;
+  
+  //-- Parse
+  if(pCmd->pdef->id == CMD_SOFT_PARAM_WRITE) { // Soft Param Write
+    for (int i=ai; i<strlen(cmdStr); i++) { 
+      if (!isspace(cmdStr[i])) { // empty space delimiter
+        nelem = sscanf(&cmdStr[i], "%x", &bv); // For Scanf we need int
+        if(nelem>0) { // Tx mode values
+          val8[bi++] = bv; 
+        } 
+        if(bi>=4){
+          val32 = (val8[0]<<24) | (val8[1]<<16) | (val8[2]<<8) | (val8[3]<<0);
+          bi = 0;
+          if(pi<__N_ParamTableID) C_SOFT_PARAM[pi].val = val32;
+          pi++;
+        }
+        //-- Skipp till next value found
+        while((!isspace(cmdStr[i]))&&(cmdStr[i] != '\0')) i++;
+      }
+    }
+  } else { // Soft Param read
+    while((isspace(cmdStr[ai]))&&(cmdStr[ai] != '\0')) ai++;
+    nelem = sscanf(&cmdStr[ai], "%x", &bv); // For Scanf we need int
+  }
+
+  //-- Report Results
+  sprintf(str,"TdkUssm[0].%s.Bytes = { ", pCmd->pdef->name);
+  ComServer_Println(str);
+  for(int pi=0; pi<__N_ParamTableID; pi++){
+    for(bi=24; bi>=0; bi-=8) {
+       sprintf(str,"%02x ", ((C_SOFT_PARAM[pi].val>>bi)&0xff));
+       ComServer_Print(str);
+    }
+  }
+  ComServer_Println("}");
+
+  //-- Register Details
+  
+}
+
+//=================[ SENSOR ]=================
+//-------------------------------------------
+// COM Server : Set/Get Parameter Value
+//-------------------------------------------
+void ComServer_SetGetParam(eTdkUssmCmdExecStruct *pCmd){
+  char str[256], str1[64], fstr[16];
+  unsigned char cmd_id = CMD_GET;
+  char cmd_name[16] = "";
+  char param_name[64] = "";
+  char val_str[32] = "";
+  char options[32] = "";
+  uint32_t  val = 0, devs, nelem;
+  bool  opt_real = false;
+  bool  opt_lut  = false;
+  float real_val = 0.0;
+  char *pdest=str, *psrc=(char*)pCmd->args;
+
+  bool valid = false;
+  uint8_t tid, eid, nbit;
+  uint32_t lsb, rst_val, lut_size;
+
+  devs   = pCmd->devices; // save and use for iterations
+  cmd_id = pCmd->pdef->id;
+  
+  //-- enhanced parser
+  //  nelem  = sscanf((char*)pCmd->args, "%s %s %s %s",cmd_name, param_name, val_str, options);
+  nelem = 0;
+  pdest = cmd_name;
+  for(int i=0, cnt=0; i<strlen(psrc); i++){
+    if(!isspace(psrc[i])){
+      valid=true;
+      pdest[cnt++] = psrc[i];
+    } else {
+      if(valid){
+        pdest[cnt] = '\0'; // end string
+        cnt = 0; // reset index
+        nelem++;
+        switch(nelem){
+          case 0:  pdest = cmd_name;    break;
+          case 1:  pdest = param_name;  break;
+          case 2:  pdest = val_str;     break;
+          case 3:  pdest = options;     break;
+          default: pdest = str;         break;     
+        }
+      }
+      valid = false;
+    }
+  }
+
+  //-- Check parameter validity
+  valid  = TdkUssm_GetParamElementIds(param_name, &tid, &eid, &lsb, &nbit, &rst_val);
+
+  //-- Options for Get command
+  if(cmd_id == CMD_GET) {
+    strncpy(options,val_str, 30); // For Get options will come on the 3rd arg 
+  }
+  if(NULL != strchr(options,'r')) { // Set using Real Value or Get real value
+    opt_real = true;
+  }
+  if(NULL != strchr(options,'l')) { // Return LUT Table for Get parameter
+    opt_lut = true;
+  }
+
+  //-- Parse value
+  if(cmd_id == CMD_SET) { 
+    if(nelem<3){
+      valid = false; // missing parameter
+    } else { // parse value
+      if(!strncmp(val_str,"0x",2)){ // Parse hex value
+        nelem = sscanf(&val_str[2], "%x", &val);  
+      } else if(opt_real){ // parse decimal
+        nelem = 1; real_val=atof(val_str); // sscanf(val_str, "%f", &real_val); 
+        valid = TdkUssm_GetValOfRealVal(C_PARAM_TABLES[tid].ptable[eid].lut, &val, real_val);
+      } else { // decimal and direct value
+        nelem = sscanf(val_str, "%d", &val);  
+      }
+      if(nelem<1) {
+        valid = false; // invalid value
+      }
+    }
+  } 
+
+//  sprintf(str,"%s -- %d -- [%s] [%s] [%s] [%s] -- %f => %d",psrc, valid, cmd_name,param_name,val_str,options, real_val, val);
+//  ComServer_Println(str);
+
+  
+  if(valid) {
+    if((eParameterTableID)tid == SOFT_PARAM) { // Board parameters
+      if(cmd_id == CMD_GET){
+        val = C_SOFT_PARAM[eid].val;
+      } else if(cmd_id == CMD_SET) {
+        C_SOFT_PARAM[eid].val = val;
+        if(eid == DEVICE_EN){
+          devs = val; // Immediately update devices for current command
+        }
+      }
+      for(int d=0; d<N_SENSORS; d++){
+        if(((0x1<<d) & devs) != 0){ // if device enabled
+          if(true) { // Print if required
+            sprintf(str,"TdkUssm[%d].%s.%s = %d",d, C_PARAM_TABLES[tid].pname, param_name, val);
+            ComServer_Println(str);
+          }
+        }
+      } // for all devices
+    } else { // Sensor parameter
+      for(int d=0; d<N_SENSORS; d++){
+        if(((0x1<<d) & devs) != 0){ // if device enabled
+          //-- 1: Read register
+          pCmd->devices = (0x1<<d); // Select appropriate device
+          pCmd->pdef = TdkUssm_GetCommandByIds(C_PARAM_TABLES[tid].readCmdId);
+          if(NULL == pCmd->pdef){
+            valid = false;
+            break;
+          } else {
+            ComServer_RegisterReadWrite(pCmd,0);
+          }
+          //-- 2: Get effective value
+          if(cmd_id == CMD_GET){
+            val = TdkUssm_GetBitsU32(pCmd->args, lsb, nbit);
+          } else { // CMD_SET
+            /*val = */TdkUssm_SetBitsU32(pCmd->args, lsb, nbit, val);
+          }
+          _data[d].param_val = val;
+          if(true) { // Print if required
+            sprintf(str,"TdkUssm[%d].%s.%s = %d",d, C_PARAM_TABLES[tid].pname, param_name, val);
+            ComServer_Println(str);
+          }
+          //-- 3: Report more details if -rl options set
+          valid = TdkUssm_GetRealValOfVal(C_PARAM_TABLES[tid].ptable[eid].lut, &real_val, val, str1);
+          _data[d].param_real_val = real_val;
+          if(valid){
+              if(opt_real) {
+                Float2Str(real_val, fstr);
+                sprintf(str,"TdkUssm[%d].%s.%s.RealVal = %s ",d, C_PARAM_TABLES[tid].pname, param_name, fstr);
+                ComServer_Println(str);
+                sprintf(str,"TdkUssm[%d].%s.%s.Description = %s %s",d, C_PARAM_TABLES[tid].pname, param_name, fstr, str1);
+                ComServer_Println(str);
+              }
+              if(opt_lut) {
+                lut_size = 0;
+                while(C_PARAM_TABLES[tid].ptable[eid].lut[lut_size].val != LUT_END) lut_size++;
+                sprintf(str,"TdkUssm[%d].%s.%s.LUT[%d] = {",d, C_PARAM_TABLES[tid].pname, param_name, lut_size);
+                ComServer_Println(str);
+                for(int i=0; i<lut_size; i++){
+                  Float2Str(C_PARAM_TABLES[tid].ptable[eid].lut[i].real_val, fstr);
+                  sprintf(str," { %3d , %s , \"%s\"}",C_PARAM_TABLES[tid].ptable[eid].lut[i].val, fstr, C_PARAM_TABLES[tid].ptable[eid].lut[i].desc);
+                  ComServer_Println(str);
+                }
+                ComServer_Println("}");
+              }
+          }       
+          //-- 4: For Set Write to register
+          if(cmd_id == CMD_SET){
+            pCmd->pdef = TdkUssm_GetCommandByIds(C_PARAM_TABLES[tid].writeCmdId); 
+            if(NULL == pCmd->pdef){
+              valid = false;
+              break;
+            } else { // Write to register
+              ComServer_RegisterReadWrite(pCmd, 0);
+            }
+          }
+        } // active devices
+      } // for all devices
+    } // valid command and params
+    pCmd->devices = pCmd->masters; // restor devices
+  } else { //-- Not found
+    sprintf(str,"INVALID_CMD");
+    ComServer_Println(str);
+  }      
+}
+
+
+//-------------------------------------------
+// COM Server : Print Distance
+//-------------------------------------------
+void ComServer_PrintDistance(int deviceMask){
+  char str[100], str1[16];
+  int  t_us, d_cm, val;
+  bool valid = true;
+
+  strcpy(str, "");
+  valid = true;
+  for(int d=0; d<N_SENSORS; d++){
+    if(((0x1<<d) & deviceMask) != 0){ // if device enabled
+      t_us = TdkUssm_GetTimeOfFlight(TriggerPin[d], EchoPin[d], CMD_SEND_A);
+      d_cm = TdkUssm_MicrosecondsToCentimeters(t_us) - (Offset_mm/10);
+      if (d_cm >= 0){
+        sprintf(str1,"%3d ",d_cm);
+        strcat(str, str1);
+      } else {
+        valid = false;
+        break;
+      }
+    } // active devices
+  }
+
+  if(valid) {
+    #ifdef PVDF_USMM_DEMO
+      // analogReadResolution(8);
+      val = analogRead(PVDF_Sensor0);
+      sprintf(str1,"%3d\t",val);
+      strcat(str, str1);
+    #endif
+    
+    ComServer_Println(str);
+    #ifdef ADAFRUIT_FEATHER_32U4
+      Board_AdaFruitBLE_Write(str);
+    #endif 
+  }
+}
+
+
+//-------------------------------------------
+// COM Server : Print Distance
+//-------------------------------------------
+void ComServer_PrintStreamoutAck(eTdkUssmCmdExecStruct *pCmd){
+  // Print Header ???
+  ComServer_Println(COM_RESPONSE_TERMINATOR);
+}
+
+
+//-------------------------------------------
+// COM Server : Print Poll Iterations
+//-------------------------------------------
+void ComServer_RunPollingIteration(eTdkUssmCmdExecStruct *pCmd) {
+  int done_flags = 0;
+  if(pCmd->iterations == 0){
+    return ;
+  } else { // progressing ...
+    switch(pCmd->state) {
+      case ELM_REQ_SEQUENCE :
+          if(NULL == pCmd->pseq) {
+             ComServer_ResetPollCmd(pCmd);
+          } else {
+             strcpy(pCmd->cmd_str,pCmd->pseq[pCmd->cntr]); 
+             if(!strncmp("seq",pCmd->pseq[pCmd->cntr],3)) { //-- Sequence checkpoint
+                done_flags=0;
+                for(int d=0; d<N_SENSORS; d++) {
+                   if(((1<<d)&pCmd->seq_devices) != 0) { // active
+                     done_flags |= TdkUssm_SequenceCheckDone(d, (pCmd->pseq[pCmd->cntr]+4), pCmd->cmd_str);
+                     ComServer_ParseCommand(pCmd, pCmd->cmd_str, true); 
+                   }
+                }
+                if(done_flags != pCmd->seq_devices){    
+                  pCmd->cntr = 0; // [TODO]: Replace with an integer offset from the string  next Step in the sequence
+                } else {
+                  pCmd->cntr++; // next seq 
+                }
+                if(!strncmp("end",pCmd->pseq[pCmd->cntr],3)) { // reached end of sequence
+                    pCmd->iterations--;
+                    pCmd->cntr = 0;
+                }
+             } else { //-- Pass through command 
+                ComServer_ParseCommand(pCmd, pCmd->cmd_str, true);  
+                pCmd->cntr++; // next seq  
+             }
+             if((!strncmp("end",pCmd->pseq[pCmd->cntr],3)) || (strlen(pCmd->pseq[pCmd->cntr])<3) || (done_flags == pCmd->seq_devices)) {
+                ComServer_ResetPollCmd(pCmd); 
+                ComServer_Println(COM_RESPONSE_TERMINATOR);
+             }
+          }
+        break;
+      case ELM_REQ_POLL :
+          ComServer_ParseCommand(pCmd, pCmd->cmd_str, false);
+          delay(pCmd->delay_ms);
+          if(pCmd->iterations > 0) pCmd->iterations--;
+          if(pCmd->iterations == 0) { 
+            ComServer_ResetPollCmd(pCmd);
+            ComServer_Println(COM_RESPONSE_TERMINATOR);
+          }   
+        break;  
+      case ELM_REQ_STREAMOUT :
+          ComServer_PrintDistance(pCmd->devices);
+          delay(pCmd->delay_ms);
+          if(pCmd->iterations > 0) pCmd->iterations--;
+          if(pCmd->iterations == 0) { 
+            ComServer_ResetPollCmd(pCmd);
+          }   
+        break;  
+      default:
+          ComServer_ResetPollCmd(pCmd);
+        break;
+    }
+  }
+}
+
+
+//-------------------------------------------
+// COM Server : Print Echos
+//-------------------------------------------
+void ComServer_PrintEchos(eTdkUssmCmdExecStruct *pCmd, int maxEchos) {
+  char str[256], str1[32];
+  int nStatusBits = 14;
+  
+  //-- Low Level wave gen/capture
+  TdkUssm_WaveGenCapture(pCmd, TriggerPin, EchoPin, NULL, 0, NULL, 0, ProgPin, AnaPin, NULL);
+  
+  //-- Decode Received wave
+  for(int d=0; d<N_SENSORS; d++){
+    if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+      //-- Perform TimeOfFlight low-level command
+      TdkUssm_DecodeRxWave(pCmd->pdef->id, d, d, pCmd->dma_flags); // We do captures in cascade ==> Rx data always on bit0  
+
+      //-- Limit max number of echos to 3
+      if(_data[d].n_echos > 3){
+        _data[d].n_echos = 3;
+      }
+      
+      //-- Extract Status Bytes ==> TODO
+      sprintf(str,"TdkUssm[%d].%s.Bytes[%d] = {", d,  pCmd->pdef->name, nStatusBits);
+      for(int i= TdkUssm_GetBitsNbyte(nStatusBits)-1; i>=0; i--) {
+        sprintf(str1," %02x",  _data[d].echo_status[i]); 
+        strcat(str,str1);
+      }
+      
+      sprintf(str1," }\n");
+      strcat(str,str1);
+      ComServer_Print(str);
+      
+      //-- Print distances 
+      sprintf(str,"TdkUssm[%d].%s.Distances[%d] = { ",d,  pCmd->pdef->name, _data[d].n_echos);
+      for(int i=0; i< _data[d].n_echos; i++) {
+        sprintf(str1,"%d ", _data[d].distances[i]);  
+        strcat(str,str1);
+      }        
+      sprintf(str1,"}\n");
+      strcat(str,str1);
+      ComServer_Print(str);
+          
+      //-- Print Echos Tn Edes ==> TODO
+      sprintf(str,"TdkUssm[%d].%s.EchosTn_us[%d] = { ",d,  pCmd->pdef->name, _data[d].n_echos); 
+      for(int i=0; i< _data[d].n_echos; i++) {
+        sprintf(str1,"%d ", _data[d].tn_echos[i]);  
+        strcat(str,str1);
+      }
+      sprintf(str1,"}\n");
+      strcat(str,str1);
+      ComServer_Print(str);
+      
+      //-- Print Echos Pulse widths ==> TODO
+      sprintf(str,"TdkUssm[%d].%s.EchosWidth_us[%d] = { ",d,  pCmd->pdef->name, _data[d].n_echos); 
+      for(int i=0; i< _data[d].n_echos; i++) {
+        sprintf(str1,"%d ", _data[d].len_echos[i]);  
+        strcat(str,str1);
+      }
+      sprintf(str1,"}\n");
+      strcat(str,str1);
+      ComServer_Print(str);
+      
+      //-- Print Echos Hight 
+      switch(_data[d].n_echo_heights){
+        case 2 :
+          sprintf(str,"TdkUssm[%d].%s.EchosHight[2] = { %d %d }\n",d,  pCmd->pdef->name, _data[d].hight_echos[0], _data[d].hight_echos[1]);
+          ComServer_Print(str);
+        break;
+        case 1 :
+          sprintf(str,"TdkUssm[%d].%s.EchosHight[1] = { %d }\n",d,  pCmd->pdef->name, _data[d].hight_echos[0]);
+          ComServer_Print(str);
+        break;
+        default : 
+          sprintf(str,"TdkUssm[%d].%s.EchosHight[0] = { }\n",d,  pCmd->pdef->name);
+          ComServer_Print(str);
+        break;
+      }
+    }  // if active device
+  } // for all devices
+  //-- If Requested Print Waveform
+  if(NULL != strchr(pCmd->cmd_str,'w')){
+    int offset=C_SOFT_PARAM[RX_WAVE_OFFSET].val; // offset
+    int nelem = sscanf(pCmd->cmd_str, "%s %d", str, &offset); 
+    ComServer_PrintWaveform(pCmd, offset, str, pCmd->pdef->name);
+  }
+}
+
+
+//-------------------------------------------
+// COM Server : Print Calibration Pulses
+//-------------------------------------------
+void ComServer_PrintCalPulse(eTdkUssmCmdExecStruct *pCmd){
+  char str[256], str1[32];
+
+  //-- Low Level wave gen/capture
+  TdkUssm_WaveGenCapture(pCmd, TriggerPin, EchoPin, NULL, 0, NULL, 0, ProgPin, AnaPin, NULL);
+  
+  //-- Decode Received wave
+  for(int d=0; d<N_SENSORS; d++){
+    if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+      //-- Perform TimeOfFlight low-level command
+      TdkUssm_DecodeRxWave(pCmd->pdef->id, d, d, pCmd->dma_flags); // We do captures in cascade ==> Rx data always on bit0  
+      
+      //-- Report measurement
+      sprintf(str,"TdkUssm[%d].%s.TCAL = { %d }\n",d, pCmd->pdef->name , _data[d].tcal_us); // Falling to Falling edge
+      ComServer_Print(str);
+      if(_data[d].cal_pulse[3]) {
+        sprintf(str,"TdkUssm[%d].%s.TCAL_EDGES[4] = { %5d %5d %5d %5d }\n", d,  pCmd->pdef->name , _data[d].cal_pulse[0], _data[d].cal_pulse[1], _data[d].cal_pulse[2], _data[d].cal_pulse[3]);
+      } else { // No data to report / no edges
+        sprintf(str,"TdkUssm[%d].%s.TCAL_EDGES[0] = { }\n", d,  pCmd->pdef->name);       
+      }
+      ComServer_Print(str);
+      
+      sprintf(str,"TdkUssm[%d].%s.FDRV = { %d }\n",d,  pCmd->pdef->name , _data[d].freq_hz); 
+      ComServer_Print(str);
+    } // if active
+  } // for active devices
+  //-- If Requested Print Waveform
+  if(NULL != strchr(pCmd->cmd_str,'w')){
+    int offset=C_SOFT_PARAM[RX_WAVE_OFFSET].val; // offset
+    int nelem = sscanf(pCmd->cmd_str, "%s %d", str, &offset); 
+    ComServer_PrintWaveform(pCmd, offset, str, pCmd->pdef->name);
+  }
+}
+
+
+
+
+//-------------------------------------------
+// COM Server : Print Analog Envelop
+//-------------------------------------------
+void ComServer_PrintEnvelop(eTdkUssmCmdExecStruct *pCmd){
+  uint8_t   adc_buf[ANA_BUF_SIZE_TOTAL];
+  char      str[128], str1[32], str2[128];
+  int       cntr=0;
+  int       str_size;
+  long      tframe_us=0;
+  int       real_ts_us = 0;
+
+  tframe_us = TdkUssm_WaveGenCapture(pCmd, TriggerPin, EchoPin, NULL, 0, NULL, 0, ProgPin, AnaPin, adc_buf);
+  if(pCmd->n_sample <= 0) {
+    real_ts_us = 0;
+  } else {
+    real_ts_us = tframe_us / pCmd->n_sample;
+  }
+  sprintf(str,"TdkUssm[0x%02x].%s.SampleTime_us = { %d }", pCmd->devices,  pCmd->pdef->name , real_ts_us); 
+  ComServer_Println(str); 
+  cntr = 1; strcpy(str2, "");
+  for(int d=0; d<N_SENSORS; d++) {
+    if(((0x1<<d) & pCmd->devices) != 0){
+      cntr++;
+      sprintf(str1, "AEnv[%d] ", d);
+      strcat(str2, str1);
+    }
+  }
+  sprintf(str,"TdkUssm[0x%02x].%s.ValueMap[%d] = { TimeUs %s}", pCmd->devices,  pCmd->pdef->name , cntr, str2); 
+  ComServer_Println(str); 
+  sprintf(str,"TdkUssm[0x%02x].%s[%d] = {", pCmd->devices,  pCmd->pdef->name , pCmd->n_sample); 
+  ComServer_Println(str); 
+  cntr = 0; tframe_us=0;
+  for(int i=0; i<pCmd->n_sample; i++){
+    sprintf(str, "%5d ", tframe_us); 
+    tframe_us += real_ts_us;
+    for(int d=0; d<N_SENSORS; d++) {
+      if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+        sprintf(str1, "%3d ", adc_buf[cntr++]);
+        strcat(str, str1);
+      }
+    } 
+    ComServer_Println(str);
+    delay(5); 
+  }
+  ComServer_Println("}");
+}
+
+
+//-------------------------------------------
+// COM Server : Print Analog Envelop
+//-------------------------------------------
+void ComServer_PrintJtagEnvelop(eTdkUssmCmdExecStruct *pCmd){
+  int mode=(int)ELM_JTAG_READ_ENV, sensorId=0;
+  char str[128], str1[32], str2[128]; 
+  uint8_t jtag_buf[JTAG_BUF_MAX_SIZE];
+  int real_sample_time_us = 0,delay_us = 0, nByte=0, nbit=16, cntr=0;
+  long ts=0;
+
+   //-- 
+  switch(pCmd->pdef->id){
+    case CMD_JTAG_ENVTHRES_READ: 
+      nbit=32; mode=(int)ELM_JTAG_READ_ENVTHRES; 
+      break;
+    case CMD_JTAG_THRESH_READ: 
+      nbit=16; mode=(int)ELM_JTAG_READ_THRES; 
+      break;
+    default: 
+      nbit=16; mode=(int)ELM_JTAG_READ_ENV; 
+      break;
+  }
+  
+  nByte = pCmd->n_sample * (nbit/16);
+  if(nByte > JTAG_BUF_MAX_SIZE) {
+    nByte = JTAG_BUF_MAX_SIZE;
+    pCmd->n_sample =  nByte/(nbit/16);
+    memset(jtag_buf, 0, pCmd->n_sample);
+  }
+
+  if(pCmd->n_sample > 0) {
+    real_sample_time_us = TdkUssm_JtagCaptureEnvelop(pCmd , mode, jtag_buf);
+    //real_sample_time_us = real_sample_time_us/pCmd->n_sample;
+  }
+
+  if((real_sample_time_us == 0) || (JTAG_N_PORT == 0)) {
+    pCmd->n_sample = 0; 
+  }
+ 
+  //-- Display Data
+  if((eDebugIds)C_SOFT_PARAM[DEBUG].val != DBG_TEXT_OFF) {
+    sprintf(str,"TdkUssm[0x%02x].%s.SampleTime_us = { %d }", pCmd->devices,  pCmd->pdef->name ,real_sample_time_us);
+    ComServer_Println(str);  
+    cntr = 1; strcpy(str2, "");
+    for(int d=0; d<N_SENSORS; d++) {
+      if(((0x1<<d) & pCmd->devices) != 0){
+        if(nbit == 16) {
+          cntr++;
+          sprintf(str1, "Env[%d] ", d);
+        } else { // 32 ==> Env & threshold
+          cntr +=2;
+          sprintf(str1, "Env[%d] Th[%d] Io[%d]", d, d, d);
+        }
+        strcat(str2, str1);
+      }
+    }
+    sprintf(str,"TdkUssm[0x%02x].%s.ValueMap[%d] = { TimeUs %s}", pCmd->devices,  pCmd->pdef->name , cntr, str2); 
+    ComServer_Println(str); 
+    sprintf(str,"TdkUssm[0x%02x].%s[%d] = {", pCmd->devices,  pCmd->pdef->name , pCmd->n_sample); 
+    ComServer_Println(str); 
+  }
+  cntr = 0;   ts=0;
+  for(int i=0; i<pCmd->n_sample; i++){
+    sprintf(str, "%5d ", ts);
+    for(int d=0; d<N_SENSORS; d++) {
+      if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+        if(nbit == 16) {
+          sprintf(str1, "%3d ", jtag_buf[cntr++]);
+        } else { // 32
+           sprintf(str1, "%3d %3d %3d", jtag_buf[cntr], jtag_buf[cntr+1], (jtag_buf[cntr+2]*100));
+           cntr +=3;
+        }
+        ts += real_sample_time_us;
+        strcat(str, str1);
+      }
+    } 
+    ComServer_Println(str);
+    delay(5); 
+  }
+  if((eDebugIds)C_SOFT_PARAM[DEBUG].val != DBG_TEXT_OFF) {
+   ComServer_Println("}");
+  }
+}
+
+
+
+//-------------------------------------------
+// COM Server : Print Waveform
+//-------------------------------------------
+void  ComServer_PrintWaveform(eTdkUssmCmdExecStruct *pCmd, int offset, const char *configStr, const char *altCmdName){
+  char str[128], str1[32], str2[128];
+  long dt=0, dt1=0, tref=0;
+  int cntr=0, val, val1=1, v0[N_SENSORS], v1[N_SENSORS];
+//  int offset = pCmd->args[0];
+  const char *cmdName = pCmd->pdef->name;
+
+  if(strlen(altCmdName)>0) cmdName = altCmdName;
+
+  cntr = 1; strcpy(str2, "");
+  for(int d=0; d<N_SENSORS; d++) {
+    
+    if(offset<2) {
+      v0[d] = 0;
+      v1[d] = 1;
+    } else {
+      v0[d] = offset*d;
+      v1[d] = v0[d] + (offset>>1);
+    }
+    if(((0x1<<d) & pCmd->devices) != 0){
+      cntr++;
+      sprintf(str1, "DIO[%d] ", d);
+      strcat(str2, str1);
+    }
+  }
+  sprintf(str,"TdkUssm[0x%02x].%s.ValueMap[%d] = { TimeUs %s}", pCmd->devices,  cmdName , cntr, str2); 
+  ComServer_Println(str); 
+
+  if(_rx_buf_ptr > WAVE_BUFF_SIZE) _rx_buf_ptr = WAVE_BUFF_SIZE;
+  if(_rx_buf_ptr > 0)  val = (_rx_buf_ptr*2)-1;
+  else val=0;
+
+  sprintf(str,"TdkUssm[0x%02x].%s.Offset = { %d }", pCmd->devices,  cmdName , offset); 
+  ComServer_Println(str); 
+  
+  sprintf(str,"TdkUssm[0x%02x].%s[%d] = {", pCmd->devices,  cmdName , val); 
+  ComServer_Println(str); 
+
+  //-- Time Ref point
+  tref = _rx_buf[0].time_us;
+  if((NULL != strchr(configStr,'t')) && (NULL == strchr(configStr,'n'))) { // Negative TX Time Stamp but not Negative ==> Move Tref
+    tref = _tx_buf[0].time_us;
+  } 
+
+  //-- TX Wave
+  if(NULL != strchr(configStr,'t')) {
+    for(int i=0; i<_tx_buf_ptr; i++){
+      dt = _tx_buf[i].time_us - tref;
+      dt1= dt-1;
+      sprintf(str,"%5d ", dt); 
+      sprintf(str2,"%5d ", dt1);     
+      for(int d=0; d<N_SENSORS; d++) {
+        if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+          val   = ((_tx_buf[i].val>>d)&0x1) ? v1[d] : v0[d];
+          if(i>0) val1  = ((_tx_buf[i-1].val>>d)&0x1) ? v1[d] : v0[d] ;
+          else    val1  = v1[d];
+          sprintf(str1,"%d ",   val  ); strcat(str,str1);
+          sprintf(str1,"%d ",   val1 ); strcat(str2,str1);
+        }
+      }
+      if(i>0) ComServer_Println(str2);
+      ComServer_Println(str);
+    }
+  }
+
+  //-- RX Wave   
+  if(NULL != strchr(configStr,'r')) {
+    for(int i=0; i<_rx_buf_ptr; i++){
+      dt = _rx_buf[i].time_us - tref;
+      dt1= dt-1;
+      sprintf(str,"%5d ", dt); 
+      sprintf(str2,"%5d ", dt1);     
+      for(int d=0; d<N_SENSORS; d++) {
+        if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+          val   = ((_rx_buf[i].val>>d)&0x1) ? v1[d] : v0[d];
+          if(i>0) val1  = ((_rx_buf[i-1].val>>d)&0x1) ? v1[d] : v0[d] ;
+          else    val1  = v1[d];
+          sprintf(str1,"%d ",   val  ); strcat(str,str1);
+          sprintf(str1,"%d ",   val1 ); strcat(str2,str1);
+        }
+      }
+      if(i>0) ComServer_Println(str2);
+      ComServer_Println(str);
+    }
+  }
+  ComServer_Println("}");
+
+  //-- DMA Timer Wave
+  if(NULL != strchr(configStr,'r')) {
+    sprintf(str,"TdkUssm[0x%02x].DMABuf[16] = {", pCmd->devices); 
+    ComServer_Println(str); 
+    for(int i=0; i<16; i++){
+      //dt = _hal_dma_buf[i] - _hal_dma_buf[0];
+      sprintf(str,"%5d ", _hal_dma_buf[i]);  //dt);    
+      ComServer_Println(str);
+    }
+  }
+  ComServer_Println("}");
+  
+}
+
+
+//-------------------------------------------
+// COM Server : Print Help
+//-------------------------------------------
+void ComServer_PrintHelp(void){
+  char str[256];
+  ComServer_Print("\nTdkUssm[0].HELP = {\n");
+  for(int i=0; i<TDK_USSM_N_CMD; i++) {
+    sprintf(str,"%-20s : %s \n", C_TDK_USSM_CMD[i].name, C_TDK_USSM_CMD[i].usage);
+    ComServer_Print(str);
+  }
+  ComServer_Print("}\n");
+}
+
+
+//-------------------------------------------
+// COM Server : Print Json
+//-------------------------------------------
+void ComServer_PrintJson(void){
+  ComServer_Println("TODO: ComServer_PrintJson");
+}
+
+
+//-------------------------------------------
+// COM Server : Sensor Register Read/Write
+//-------------------------------------------
+void  ComServer_RegisterReadWrite (eTdkUssmCmdExecStruct *pCmd, int printMask) {
+  char str[256], str1[16];
+  int nbit=0, nbyte=0, lsb=0;
+  int rd_mask=0;
+  
+  for(int d=0; d<N_SENSORS; d++){
+    if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+      if(pCmd->pdef->rx_bits) {
+        rd_mask =  printMask; // Save arg for register details
+        nbit = pCmd->pdef->rx_bits;
+        nbit = TdkUssm_RegisterRead (TriggerPin[d], EchoPin[d], pCmd->pdef->id, pCmd->args, nbit);
+        if(nbit < pCmd->pdef->rx_bits){ // Discard imcplete frame and report as no response
+          nbit=0; 
+        } else { //-- Save data
+          _data[d].rx_data_len = nbit;
+          _data[d].rx_data_nbyte = TdkUssm_GetBitsNbyte(_data[d].rx_data_len); 
+          memcpy(_data[d].rx_data, pCmd->args, _data[d].rx_data_nbyte);
+          TdkUssm_SaveData(pCmd->pdef->id, d);
+        }
+      } else {
+        rd_mask =  0; // No Details for Write
+        nbit = pCmd->pdef->tx_bits;
+        TdkUssm_RegisterWrite (TriggerPin[d], EchoPin[d], pCmd->pdef->id, pCmd->args, nbit);
+        //-- Save data
+        _data[d].rx_data_len = nbit;
+        _data[d].rx_data_nbyte = TdkUssm_GetBitsNbyte(_data[d].rx_data_len); 
+        memcpy(_data[d].rx_data, pCmd->args, _data[d].rx_data_nbyte);
+        TdkUssm_SaveData(pCmd->pdef->id, d);
+      }
+      //-- Report result
+      nbyte = nbit/8;
+      if(nbit%8) nbyte++;
+      sprintf(str,"TdkUssm[%d].%s.Bytes[%d] = {", d,  pCmd->pdef->name, nbit);
+      for(int b=(nbyte-1); b>=0; b--) {
+        sprintf(str1," %02x", pCmd->args[b]);
+        strcat(str, str1);
+      }
+      strcat(str," }");
+      ComServer_Println(str);
+      
+      //-- If ReadRegister and mode != 0 => Print all values
+      if(rd_mask) {
+         for(int t=0; t<__N_ParamTableID; t++) { // search for table
+            if(C_PARAM_TABLES[t].readCmdId == pCmd->pdef->id){ // Found
+              sprintf(str,"TdkUssm[%d].%s[%d] = {", d,  C_PARAM_TABLES[t].pname, C_PARAM_TABLES[t].size);
+              ComServer_Println(str);
+              for(int e=0;e<C_PARAM_TABLES[t].size;e++){
+                if(rd_mask & 0x1ul) {
+                  sprintf(str,"%3d |", C_PARAM_TABLES[t].ptable[e].id);  ComServer_Print(str);
+                }
+                if(rd_mask & 0x2ul) {
+                  lsb = C_PARAM_TABLES[t].ptable[e].lsb;
+                  sprintf(str,"%3d | ", C_PARAM_TABLES[t].ptable[e].lsb);  ComServer_Print(str);
+                }
+                if(rd_mask & 0x4ul) {
+                  nbit = C_PARAM_TABLES[t].ptable[e].nbit;
+                  sprintf(str,"%3d | ", nbit);  ComServer_Print(str);
+                }
+                if(rd_mask & 0x8ul) {
+                  sprintf(str,"%3d |", C_PARAM_TABLES[t].ptable[e].val);  ComServer_Print(str);
+                }            
+                if(rd_mask & 0x10ul) {
+                  sprintf(str,"%-20s |", C_PARAM_TABLES[t].ptable[e].name);  ComServer_Print(str);
+                }
+                if(rd_mask & 0x20ul) { // Value
+                  uint32_t val;
+                  char  dest[128];
+                  if(nbit < 32) {
+                    val = TdkUssm_GetBitsU32(pCmd->args, lsb, nbit);
+                    sprintf(str,"%4d |", val);  ComServer_Print(str);
+                  } else { // Hex bytes
+                    memset(dest,0,128);
+                    TdkUssm_GetBitRange((uint8_t *)dest, 0, pCmd->args, lsb, nbit);
+                    nbyte = nbit/8;
+                    if(nbit%8) nbyte++;
+                    strcpy(str,"0x");
+                    for(int i=nbyte-1; i>=0; i--) { // msb first
+                      sprintf(str1,"%02x", dest[i]); 
+                      strcat(str,str1);
+                    }
+                    strcat(str, " |");
+                    ComServer_Print(str);
+                  }
+                }
+                if(rd_mask & 0x40ul) { // Real Value From LUT
+                  uint32_t val;
+                  float real_val;
+                  char  dest[128];
+                  bool  valid=false;
+                  if(nbit < 32) {
+                    val = TdkUssm_GetBitsU32(pCmd->args, lsb, nbit);
+                    valid = TdkUssm_GetRealValOfVal(C_PARAM_TABLES[t].ptable[e].lut, &real_val, val, dest);
+                    if(valid) {
+                      Float2Str(real_val, str1);
+                      sprintf(str,"%8s %-20s |",str1, dest);
+                      ComServer_Print(str);
+                    } else {
+                      sprintf(str,"                              |"); // empty
+                      ComServer_Print(str);
+                    }
+                  } else { // hex string
+                      ComServer_Print(" |");
+                  }
+                } // end real value
+                if(rd_mask & 0x80ul) {
+                  sprintf(str,"%s", C_PARAM_TABLES[t].ptable[e].description);  ComServer_Print(str);
+                }
+                ComServer_Println(""); // end of line / register filed
+              } // end for all table elements
+              sprintf(str,"}");
+              ComServer_Println(str);
+              delay(100);
+            } // end if register found in read table
+         }
+      } // end if read mask
+      
+    }
+  }
+}
+
+
+//-------------------------------------------
+// COM Server : Program Sensors
+//-------------------------------------------
+void ComServer_ProgramSensors(eTdkUssmCmdExecStruct *pCmd) {
+  char str[256];
+  for(int d=0; d<N_SENSORS; d++){
+    if(((0x1<<d) & pCmd->devices) != 0){ // if device enabled
+      TdkUssm_EepromProgram (TriggerPin[d], EchoPin[d], ProgPin[d], pCmd->pdef->id);
+      sprintf(str,"TdkUssm[%d].%s.Bytes[0] = { }", d,  pCmd->pdef->name);
+      ComServer_Println(str);
+    }
+  }
+}
+
+
+
+//-------------------------------------------
+// Helper Functions : Reset Pol Command
+//-------------------------------------------
+void   ComServer_ResetPollCmd(eTdkUssmCmdExecStruct *pCmd) {
+  pCmd->cntr       = 0;
+  pCmd->iterations = 0;
+  pCmd->delay_ms   = 0;
+  pCmd->cmd_str[0] = '\0';
+  pCmd->state = ELM_REQ_NONE; 
+}
+
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Sensor Data Init Function
+//-------------------------------------------
+void  TdkUssm_InitSensorData(void) {
+   for(int d=0; d<N_SENSORS; d++){
+      _data[d].n_echos = 0;
+      _data[d].t_offset_us = 0;
+      _data[d].d_offset_mm = 0; //Offset_mm;
+      _data[d].meas[0] = 0;
+   }
+}
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// LIT Function: Real Val to Reg Val
+//-------------------------------------------
+bool   TdkUssm_GetValOfRealVal(const eLUTStruct *pLut, uint32_t *pVal, float real_val) {
+  bool      valid = false;
+  int       lut_size=0;
+  float     gain;
+
+  if(pLut == C_LUT_NULL) {
+    return false;
+  } else {
+    lut_size=0;
+    while(pLut[lut_size++].val != LUT_END); // Search Lut size
+    for(int i=0; i<lut_size; i++){
+      if(real_val == pLut[i].real_val) { // LUT
+        *pVal = (uint32_t)pLut[i].val;
+        return true;
+      } else if( (i>0) && ((pLut[i-1].val+1) == (pLut[i].val)) ) { // Adjascent LUT entries
+        if(abs(real_val - pLut[i-1].real_val) <= abs(real_val - pLut[i].real_val)) { // Select nearest value
+          *pVal = (uint32_t)pLut[i-1].val;
+        } else {
+          *pVal = (uint32_t)pLut[i].val;
+        }
+        return true;
+      } else if( (i>0) && // LIT: LINEARISATION TABLE
+        (  ((real_val<pLut[i].real_val)&&(real_val>pLut[i-1].real_val)) 
+        || ((real_val>pLut[i].real_val)&&(real_val<pLut[i-1].real_val))
+        )) { // process in between
+        if(pLut[i].real_val == pLut[i-1].real_val) { // avoid divsion by 0
+          return false;
+        } else {
+          gain   = (pLut[i].val -  pLut[i-1].val) / (pLut[i].real_val -  pLut[i-1].real_val);
+          *pVal  = (uint32_t)((gain * (real_val - pLut[i-1].real_val)) + pLut[i-1].val);  
+          return true;
+        }
+      } // end processing
+    }
+  }
+  return false; // Not found or our of boundaries
+}
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// LIT Function: Reg Val to Real Val
+//-------------------------------------------
+bool   TdkUssm_GetRealValOfVal(const eLUTStruct *pLut, float *pRealVal, uint32_t val, char *pDesc){
+  char fstr[16];
+  bool                valid = false;
+  int                 lut_size=0;
+  float               gain;
+
+  if(pLut == C_LUT_NULL) {
+    return false;
+  } else {
+    lut_size=0; 
+    while(pLut[lut_size++].val != LUT_END);
+    for(int i=0; i<lut_size; i++){
+//      //-- Debug
+//      Float2Str(pLut[i].real_val, fstr);
+//      sprintf(pDesc,"%d: %d %s %s",i, pLut[i].val, fstr, pLut[i].desc);
+//      ComServer_Println(pDesc);
+//      //-- End Debug
+      if(val == pLut[i].val) {  // LUT
+        *pRealVal = pLut[i].real_val;
+        strcpy(pDesc, pLut[i].desc);
+        //-- Debug
+//        Float2Str(*pRealVal, fstr);
+//        sprintf(pDesc,"%s %s",i, val, fstr, pLut[i].desc);
+//        ComServer_Println(pDesc);
+        //-- End Debug
+        return true;
+      } else if( (i>0) && ((val<pLut[i].val)&&(val>pLut[i-1].val)) ) { // LIT: LINEARISATION TABLE
+        gain   = (pLut[i].real_val -  pLut[i-1].real_val) / (pLut[i].val -  pLut[i-1].val);
+        *pRealVal  = (gain * (val-pLut[i-1].val)) + pLut[i-1].real_val;
+        strcpy(pDesc, pLut[i].desc);
+        //-- Debug
+//        Float2Str(*pRealVal, fstr);
+//        sprintf(pDesc,"%s %s",i, val, fstr, pLut[i].desc);
+//        ComServer_Println(pDesc);
+        //-- End Debug
+        return true;
+      } // end processing
+    }
+  }
+  return false; // Not found or our of boundaries
+}
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Decode Waveform into Data
+//-------------------------------------------
+long  TdkUssm_DecodeRxWave(const int cmdId, const int devideId, const int rxBitId, uint32_t dmaMask) {
+  int dtl, dth, stop_pos=0;
+  uint8_t bit_val = 0;
+  uint32_t tp = 0, tn = 0, t0 = 0;  
+  eIOState ios;
+  uint32_t parity_val;
+  uint8_t  *src;
+  int d = devideId;
+  int pcnt=0; 
+  int val0=0;
+
+  _data[d].rx_data_len = 0;
+  t0 = _rx_buf[0].time_us;
+  //-- Prepare data rehister:  Cler to avoid leading non-0 values 
+   memset(_data[d].rx_data, 0, 16);  
+  //-- Eval pulse waveform
+  tp  = _rx_buf[_rx_buf_ptr-1].time_us - t0;
+  tn  = tp;
+  for(int i=(_rx_buf_ptr-1); i>=0; i--) {
+    ios = TdkUssm_GetIoState(_rx_buf, i, rxBitId);
+    switch(ios) {
+      case IO_IN_POSEDGE :
+        tp  = _rx_buf[i].time_us - t0;
+        dth = tn - tp;
+        break;  
+      case IO_IN_NEGEDGE :
+        tn  = _rx_buf[i].time_us - t0;
+        dtl = tp - tn; 
+       //-- TODO : Enhance Bit decoding using learnining algorithm instead of fixed Value
+        bit_val = (dtl > TBIT0_CMP) ? 0 : 1;
+        TdkUssm_SetBit(_data[d].rx_data, _data[d].rx_data_len, bit_val);             
+        _data[d].rx_data_len++;                 
+        break;
+      default :
+        break;
+    } // end switch
+  } // End for(rx_buf_ptr)
+
+  if(TdkUssm_IsSendReceiveCommand(cmdId)) {
+    TdkUssm_GetDistances(cmdId, d, rxBitId, dmaMask);
+  } else if(cmdId == CMD_CAL_PULSE) {
+    //-- Clear buffer
+    for(int i=0; i<4; i++) { // Clear buffer
+      _data[d].cal_pulse[i] = 0ul;
+    }
+    //-- Evaluate cal_pulse
+    bool use_dma_buf = (dmaMask & (1<<devideId)) && (_hal_dma_buf[0] != 0);
+    if(use_dma_buf){
+      for(int i=0; i<4; i++){
+        _data[d].cal_pulse[i] = (_hal_dma_buf[i+12] - _hal_dma_buf[12])/_hal_timer_freq_Mhz;
+      }
+      float tcal_raw = _hal_dma_buf[12+2] - _hal_dma_buf[12];
+      _data[d].tcal_us  =  ((float)tcal_raw)/_hal_timer_freq_Mhz;
+    } else { // Use Software IO Sampling
+      for(int i=0; i<_rx_buf_ptr; i++) {
+         ios = TdkUssm_GetIoState(_rx_buf, i, rxBitId);
+         switch(ios) {
+            case IO_IN_POSEDGE :
+            case IO_IN_NEGEDGE :
+                  if(pcnt == 0) {
+                     val0 = _rx_buf[i].time_us - t0;
+                  }
+                  _data[d].cal_pulse[pcnt++] = (_rx_buf[i].time_us - t0) - val0; 
+                break;
+            default: // do nothing
+                break;
+         }
+         if(pcnt >= 4) {
+            //-- Evaluate TCAL And frequency
+            _data[d].tcal_us  = _data[d].cal_pulse[2]-_data[d].cal_pulse[0]; 
+          break;
+        }
+      }
+    } // end if not use_dma_buf
+    //-- Eval Frequency
+    if(_data[d].tcal_us > 0) {
+      _data[d].freq_hz = (uint32_t)((496 * 1000000U)/ _data[d].tcal_us);
+    } else {
+      _data[d].freq_hz = 0; //Error invalid measurement or no sensor response
+    }
+  }
+  
+  _data[d].rx_data_nbyte = TdkUssm_GetBitsNbyte(_data[d].rx_data_len); 
+  //--------- Store Data ------
+  TdkUssm_SaveData(cmdId, d);
+  
+  return _data[d].rx_data_len;
+}
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Save Sensor Data from last command
+//-------------------------------------------
+int TdkUssm_SaveData(const int cmdId, const int devideId) {
+  int ret = cmdId;
+
+  int dtl, dth, stop_pos=0, tv;
+  uint8_t bit_val = 0;
+  uint32_t tp = 0, tn = 0, t0 = 0;  
+  eIOState ios;
+  uint32_t parity_val;
+  int d = devideId;
+  int pcnt=0; 
+  int val0=0;
+  
+  switch(cmdId) {
+    case CMD_THRES_A_READ   : memcpy(_data[d].thres_a, _data[d].rx_data, 11);     break;
+    case CMD_THRES_B_READ   : memcpy(_data[d].thres_b, _data[d].rx_data, 11);     break;
+    case CMD_MEAS_READ      : memcpy(_data[d].meas , _data[d].rx_data, 10);       break;
+    case CMD_READ_STATUS    : memcpy(_data[d].status , _data[d].rx_data, 3);      break;
+    case CMD_READ_TEMP      : // Temperature: temp_val = a*(temp -442) + 25
+                              // temp_25 = 442 [430 454], slop a=0.513 [0.488 0.541]
+                              tv = TdkUssm_GetBitsU32(_data[d].rx_data, 0, 24);   
+                              _data[d].temp_val = (0.513f * (tv - 442)) + 25;
+                              memcpy(_data[d].temp , _data[d].rx_data, 4); 
+                              break;
+    case CMD_READ_ID        : memcpy(_data[d].id , _data[d].rx_data, 4);          break;
+    case CMD_READ_NFD_STATUS: memcpy(_data[d].nfd_status , _data[d].rx_data, 4);  break;
+    case CMD_CALIB_READ     : memcpy(_data[d].calib , _data[d].rx_data, 10);      break;
+    case CMD_EE_READ        : memcpy(_data[d].ee_data , _data[d].rx_data, 10);    break;
+    default :
+          if(TdkUssm_IsSendReceiveCommand(cmdId)) {
+            memcpy(_data[d].echo_status, _data[d].rx_data, 3);
+          } else {
+            ret=0; // no data stored
+          }
+          break;
+  } // end switch
+  return ret;
+}
+
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Distance Processing Function
+//-------------------------------------------
+long  TdkUssm_GetDistances(const int cmdId, const int sensorId, const int bitId, uint32_t dmaMask){
+  eSensorData *pdata = &_data[sensorId];
+  int      sync_pos=0, status_cfg;
+  uint32_t tn, tp;
+  float    t_pre, d_pre;
+  long     tn_us, tp_us, dt, dist; 
+  int      ref_index = 2;
+  uint32_t ref_us    = 50;
+
+   //-- Clear buffers
+  for(int i=0; i<4; i++) {
+    pdata->tn_echos[i]   = 0;
+    pdata->len_echos[i]  = 0;
+    pdata->distances[i]  = 0;
+  }
+  pdata->n_echos = 0;
+
+  //-- Parse status bits
+  if(pdata->meas[0]) {
+    status_cfg = TdkUssm_GetBitsU32(pdata->meas, 0 ,2);
+  } else { //-- Just a workaround to avoid empty echo_high when Sensor config not refreshed !!
+    status_cfg =  2; // Default !
+  }
+  switch(status_cfg){
+    case 3 :
+      sync_pos = _rx_buf_ptr - ((18+2)*2);
+      pdata->n_echo_heights = 2;
+      pdata->hight_echos[0] = ( (TdkUssm_GetBitsU32(pdata->rx_data,  6 ,11) & 0x3f)<<2);
+      pdata->hight_echos[1] = ( (TdkUssm_GetBitsU32(pdata->rx_data, 12 ,17) & 0x3f)<<2);
+      break;
+    case 2 :
+      sync_pos = _rx_buf_ptr - ((12+2)*2);
+      pdata->n_echo_heights = 1;
+      pdata->hight_echos[0] = ( (TdkUssm_GetBitsU32(pdata->rx_data,  6 ,11) & 0x3f)<<2);
+      break;
+    case 1 :
+      sync_pos = _rx_buf_ptr - ((6+2)*2);
+      pdata->n_echo_heights = 0;
+      break;
+    default :
+      sync_pos = _rx_buf_ptr - ((0+2)*2); 
+      pdata->n_echo_heights = 0;
+      break;
+  }   
+  
+  if(sync_pos<0) sync_pos = 0; 
+
+  //-- Extract Status Bits
+  
+
+  //-- Extract Echos
+  ref_index = 0;
+  for(int i=0; i<_rx_buf_ptr; i++) {  // Till Sync bits position
+    if(ref_index < sync_pos) {
+      if((IO_IN_NEGEDGE == TdkUssm_GetIoState(_rx_buf, i, bitId))) {  // negedge
+        tn_us = _rx_buf[i].time_us - _rx_buf[0].time_us;
+        pdata->tn_echos[pdata->n_echos] = tn_us;
+        ref_index++;
+      } else if((IO_IN_POSEDGE  == TdkUssm_GetIoState(_rx_buf, i, bitId)) && (pdata->tn_echos[pdata->n_echos]>0)){ // posedge
+        tp_us = _rx_buf[i].time_us - _rx_buf[0].time_us;
+        pdata->len_echos[pdata->n_echos] = tp_us - tn_us;
+        t_pre = pdata->tn_echos[pdata->n_echos] - pdata->t_offset_us;
+        d_pre = (int)TdkUssm_MicrosecondsToMillimeters(t_pre); // (int)(t_pre * ((float)_const_c/(2.0*1000)));
+        pdata->distances[pdata->n_echos] = d_pre - pdata->d_offset_mm; // Distance in mm. T is in us
+        pdata->n_echos++;
+        ref_index++;
+      }
+      if(pdata->n_echos >= 4) break; // Max Echos is 10
+    } else { // pulses extractions done
+     i = _rx_buf_ptr; // move to the end
+    }
+  }
+
+ //-- If DMA is used, correct data using DMA Buffer values
+  if((dmaMask&(1<<sensorId)) && (_hal_dma_buf[0]!=0)) { // If Channel has DMA-Timer
+    //-- Ofssets for measurements
+    if(TdkUssm_IsSendReceiveA(cmdId)) {
+      ref_index = 1;
+      ref_us = _hal_dma_buf[ref_index]; // posedge of cmd pulse
+    } else {
+      ref_index = 5;      
+      ref_us = _hal_dma_buf[ref_index]+(50*_hal_timer_freq_Mhz); // Last posedge + TD (50us)  
+    }   
+    //-- Do Measurements
+    pdata->n_echos=0;
+    for(int i=0; i<sync_pos; i++) {  // Till Sync bits position
+      if((i>ref_index) && !(i&0x1u)) {
+        tn    = _hal_dma_buf[i];
+        tp    = _hal_dma_buf[i+1];
+        tn_us = (tn - ref_us)/_hal_timer_freq_Mhz;
+        tp_us = (tp - ref_us)/_hal_timer_freq_Mhz;
+        t_pre = tn_us - pdata->t_offset_us;
+        d_pre = (int)TdkUssm_MicrosecondsToMillimeters(t_pre); // d_pre = t_pre * ((float)_const_c/(2.0*1000));
+        dt    = tp_us - tn_us;
+        dist  = d_pre - pdata->d_offset_mm;
+        //-- Store results
+        pdata->tn_echos[pdata->n_echos]  = (uint32_t)tn_us;
+        pdata->len_echos[pdata->n_echos] = (uint32_t)dt;
+        pdata->distances[pdata->n_echos] = (int)dist; // Distance in mm. T is in us
+        pdata->n_echos++;
+      }
+      if(pdata->n_echos >= 4) break; // Max Echos is 10
+    }
+  } // If DMA Enabled
+
+ //-- Non Elmos Sensors
+ //-- Simple trigger echo mode with time-of-flight coded on Echo pulse width
+ #ifdef SENSOR_TYPES
+  switch(SensorType[sensorId]) {
+    case HC_SR04:
+    case JSN_SR04T_V3:
+        pdata->n_echos = 0;
+        for(int i=1; i<_rx_buf_ptr; i++) {  // i=0 is default value set to 1 by default
+          if((IO_IN_POSEDGE == TdkUssm_GetIoState(_rx_buf, i, bitId))) { 
+              tp_us = _rx_buf[i].time_us - _rx_buf[0].time_us;
+              pdata->tn_echos[pdata->n_echos] = tp_us;
+          } else if(IO_IN_NEGEDGE  == TdkUssm_GetIoState(_rx_buf, i, bitId)){ 
+              tn_us = _rx_buf[i].time_us - _rx_buf[0].time_us;
+              t_pre = tn_us - tp_us;
+              pdata->len_echos[pdata->n_echos] = tn_us;
+              d_pre = (int)TdkUssm_MicrosecondsToMillimeters(t_pre); // (int)(t_pre * ((float)_const_c/(2.0*1000)));
+              pdata->distances[pdata->n_echos] = d_pre - 0; // pdata->d_offset_mm; // Distance in mm. T is in us
+              pdata->n_echos++;
+              i = _rx_buf_ptr;
+              break; // all done !
+          }
+      }
+  } // switch  
+ #endif // Different SENSOR_TYPES
+
+  return pdata->n_echos; // No pulse found
+}
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Get IO State Helper Function
+//-------------------------------------------
+eIOState TdkUssm_GetIoState(RxWaveStruct_t *pwave, uint32_t pos, uint8_t bit_id) {
+  uint32_t bit_mask = 1<<bit_id;
+  uint8_t io_st = 0;
+  
+  if(pos > 0ul) {
+    io_st  = (pwave[pos-1].val & bit_mask) ? 1 : 0;
+  } else { // Default state is high
+    io_st  = 1;
+  }
+  io_st |= (pwave[pos  ].val & bit_mask) ? 2 : 0;
+  
+  switch(io_st) {
+    case 0b00 : return IO_IN_0;
+    case 0b01 : return IO_IN_NEGEDGE;
+    case 0b10 : return IO_IN_POSEDGE;
+    case 0b11 : return IO_IN_1;
+    default   : return  IO_IN_VAL;
+  }
+}
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Time Of Flight Basic Implementation
+//-------------------------------------------
+long TdkUssm_GetTimeOfFlight(const int txPin, const int rxPin, int cmd_id) {
+  int val=1, val_z, cntr=0;
+  uint32_t timeout=0, t0, ti; 
+  bool done = false;
+  bool looped = false;
+  long duration_us = 0;
+  const long COMMAND_TIMEOUT = 18000ul;
+
+  t0 =  micros();
+  timeout = t0 + COMMAND_TIMEOUT; // 
+  looped = (t0 > timeout) ? true : false;
+
+  pinMode(txPin, OUTPUT);
+  switch(cmd_id)
+  {
+    default:
+    case CMD_SEND_A:
+        digitalWrite(txPin, IO_DRIVE_LOW);
+        delayMicroseconds(TSND);
+        break;
+  }
+  //-- Finish  
+  digitalWrite(txPin, IO_RELEASE);
+  delayMicroseconds(5);
+  pinMode(rxPin, IO_IN_MODE);
+  val = digitalRead(rxPin);
+  val_z = val;
+  
+  _rx_buf_ptr = 0;
+  while (! done) {
+     val = digitalRead(rxPin);
+     ti =  micros();
+     if(val != val_z) {
+        val_z = val;
+        _rx_buf[_rx_buf_ptr].time_us = ti;
+        _rx_buf[_rx_buf_ptr].val =  val;  
+        _rx_buf_ptr++;
+        if(_rx_buf_ptr >= WAVE_BUFF_SIZE){
+           done = true; //  Force exit       
+        }
+     } else { // Keep watching
+        if(timeout < ti){
+          if(looped) {
+            if((ti & 0xffff0000) == 0x0ul) done = true;
+          } else {
+            done = true;
+          }
+        }
+     } // if changed
+  } // while
+
+  //-- Process the distance and send the value
+  duration_us = _rx_buf[3].time_us - _rx_buf[1].time_us;
+
+  if((duration_us<0) || (duration_us>=COMMAND_TIMEOUT)) {
+    return 0; // invalid measurements
+  } else {
+    return duration_us;
+  }
+}
+
+
+//-------------------------------------------
+// TDK Ultrasonic Sensor Driver
+// Capture IO Waveform
+//-------------------------------------------
+long TdkUssm_WaveGenCapture(eTdkUssmCmdExecStruct *pCmd, const int *txPin, const int *rxPin, int *txBits, int nTxBits, int *rxBits, int nRxBits, const int *progPin, const int *anaPin, uint8_t *anaBuf){
+  int val=1, val_z;
+  uint32_t timeout=0, t0, ti; 
+  bool done = false;
+  bool looped = false;
+  long duration_us = 0;
+  int sample_cntr = 0;
+  int device_mask = ~pCmd->devices;
+  int master_mask = pCmd->masters;
+  const eWaveGenCmd *pwave;
+  unsigned int  bitVal, bitDrive;
+
+  //-- Init
+  _tx_buf_ptr   = 0;
+  _rx_buf_ptr   = 0;
+  memset(_hal_dma_buf, 0, _HAL_DMA_BUF_SIZE);
+
+  pwave = pCmd->pdef->pwave;  
+  while(pwave->cmd != IO_DONE){
+    if(IO_IN_ANA == pwave->cmd){
+        Board_AnalogStart();
+        break;
+    } else  if(IO_IN_EDGE == pwave->cmd){
+       //-- [TODO] This is not Clean ?????
+        pCmd->dma_flags = Board_TimerStart(pCmd->devices); 
+        //for(int d=0; d<N_SENSORS; d++)  pinMode(rxPin[d], IO_IN_MODE);  
+        break;
+    }
+    pwave++; 
+  }
+
+  //-- Command Wave Send (Tx)
+  _tx_buf[_tx_buf_ptr].time_us = micros();
+  _tx_buf[_tx_buf_ptr++].val   = WAVEGEN_BUS_MASK;  
+  for(int d=0; d<N_SENSORS; d++) 
+  {
+    pinMode(txPin[d], OUTPUT);
+//    digitalWrite(txPin[d], IO_RELEASE);
+  }
+
+  //-- Start Wave Generation
+  pwave = pCmd->pdef->pwave;  
+  done = false;
+  while(! done) 
+  {
+    switch(pwave->cmd)
+    {
+      case IO_INIT:
+//        for(int d=0; d<N_SENSORS; d++) digitalWrite(txPin[d], IO_RELEASE);
+//        _tx_buf[_tx_buf_ptr].time_us = micros();
+//        _tx_buf[_tx_buf_ptr++].val   = WAVEGEN_BUS_MASK;  
+        switch(pwave->val)
+        {
+          case IO_IN_ANA:
+          case IO_IN_PU : 
+          default :
+            for(int d=0; d<N_SENSORS; d++) {
+               //--TODO: Move this to Timer Start HAL Function               
+               if(!(pCmd->dma_flags & (1ul<<d))) {
+                  pinMode(rxPin[d], IO_IN_MODE);  
+               } else {
+                
+               }
+               
+            }
+            done=true;
+            break;
+        } // end IO mode change
+        pwave++; // Next wave vector
+        break;
+        
+      case IO_OUT_0:
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = device_mask; 
+        for(int d=0; d<N_SENSORS; d++) { 
+          if((1<<d) & device_mask) digitalWrite(txPin[d], IO_RELEASE);
+          else digitalWrite(txPin[d], IO_DRIVE_LOW);
+        }
+        delayMicroseconds(pwave->arg); 
+        pwave++; // Next wave vector
+       break;
+        
+      case IO_OUT_1:
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = WAVEGEN_BUS_MASK; 
+        for(int d=0; d<N_SENSORS; d++) digitalWrite(txPin[d], IO_RELEASE);
+        delayMicroseconds(pwave->arg); 
+        pwave++; // Next wave vector
+       break;
+        
+      case IO_OUT_PROG:
+        if(progPin == NULL)
+        {
+          pwave++;
+          break;
+        }
+        bitVal   = pwave->val;
+        bitDrive = bitVal & ~device_mask; // only enabled devices
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = WAVEGEN_BUS_MASK; 
+        for(int d=0; d<N_SENSORS; d++) 
+        {
+          digitalWrite(txPin[d], IO_RELEASE);
+          pinMode(progPin[d], OUTPUT);
+          if((1<<d) & bitDrive) digitalWrite(progPin[d], PROG_ENABLE);
+          else digitalWrite(progPin[d], PROG_DISABLE); // Apply VPP
+        }
+        delayMicroseconds(pwave->arg); 
+        pwave++; // Next wave vector
+       break;    
+
+      case IO_OUT_BUS: 
+        bitVal = pwave->val;
+        bitDrive = ( ((bitVal>>WAVEGEN_SND_OFFSET) & master_mask) | ((bitVal>>WAVEGEN_RCV_OFFSET) & ~master_mask) | device_mask) & WAVEGEN_BUS_MASK; 
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = bitDrive; 
+        for(int d=0; d<N_SENSORS; d++)
+        { 
+          if((1<<d) & bitDrive) digitalWrite(txPin[d], IO_RELEASE);
+          else digitalWrite(txPin[d], IO_DRIVE_LOW);
+        }
+        delayMicroseconds(pwave->arg); 
+        pwave++; // Next wave vector
+       break;
+        
+      case IO_OUT_BIT: 
+      case IO_OUT_VAL:
+        //-- Prepare bit Drive Vector
+        switch(pwave->cmd){
+          case IO_OUT_BIT: 
+            bitVal = pwave->arg;
+            bitDrive = (bitVal) ?  WAVEGEN_BUS_MASK :  device_mask;
+            pwave++; // Next wave vector
+            break;
+          case IO_OUT_VAL:
+            nTxBits-- ;
+            bitVal = (nTxBits>=0) ? txBits[nTxBits] : WAVEGEN_BUS_MASK;
+            bitDrive = ( bitVal | device_mask) & WAVEGEN_BUS_MASK; 
+            if(nTxBits <= 0){
+              pwave++; // Next wave vector
+            }
+            break;
+        }
+        //-- Bit Phase 0
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = device_mask; 
+        for(int d=0; d<N_SENSORS; d++)
+        { 
+          if((1<<d) & device_mask) digitalWrite(txPin[d], IO_RELEASE);
+          else digitalWrite(txPin[d], IO_DRIVE_LOW);
+        }
+        delayMicroseconds(TBIT_PHASE-2);  // Bit phase 0
+        //-- Bit Phase 2
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = bitDrive; 
+        for(int d=0; d<N_SENSORS; d++)
+        { 
+          if((1<<d) & bitDrive) digitalWrite(txPin[d], IO_RELEASE);
+          else digitalWrite(txPin[d], IO_DRIVE_LOW);
+        }
+        delayMicroseconds(TBIT_PHASE-2);  // Bit phase 1
+        //-- Bit Phase 3
+        _tx_buf[_tx_buf_ptr].time_us = micros();
+        _tx_buf[_tx_buf_ptr++].val   = WAVEGEN_BUS_MASK; 
+        for(int d=0; d<N_SENSORS; d++) digitalWrite(txPin[d], IO_RELEASE);
+        delayMicroseconds(TBIT_PHASE-2);  // Bit phase 2 ==> Consider 10us for processing pre & post
+        break; 
+    
+      case IO_DONE: 
+        done = true;
+        _rx_buf_ptr = 0;
+        return 0;  
+        break;
+                
+      default: // Just exit
+        done = true; 
+        pwave++; // Next wave vector
+        break;
+    } 
+  } // end of Drive part
+
+
+  //-- Command Wave Receive (Rx)
+  done = false;  
+  t0 =  micros();
+  timeout = t0 + pwave->arg; 
+  looped = (t0 > timeout) ? true : false;
+  _rx_buf_ptr = 0;
+  switch(pwave->cmd)
+  { 
+    case IO_IN_EDGE: // Digital In Edges
+      while (! done) {
+        val = 0; 
+        bitDrive=1;
+        ti =  micros();
+        for(int d=0; d<N_SENSORS; d++) 
+        {
+          bitVal = digitalRead(rxPin[d]);
+          if(bitVal) val |= bitDrive;
+          bitDrive = bitDrive << 1;
+        }
+        val |= device_mask; // mask non needed waveforms
+        if(val != val_z) 
+        {
+            val_z = val;
+            _rx_buf[_rx_buf_ptr].time_us = ti;
+            _rx_buf[_rx_buf_ptr].val =  val;  
+            _rx_buf_ptr++;
+            if(_rx_buf_ptr >= WAVE_BUFF_SIZE){
+             done = true; //  Force exit       
+            }
+        } else // Keep watching
+        { 
+          if(timeout < ti)
+          {
+            if(looped) {
+              if((ti & 0xffff0000) == 0x0ul) done = true;
+            } else {
+              done = true;
+            }
+          }
+        } // if changed
+      } // while
+      break;
+
+    case IO_IN_ANA: // Analog waveform capture
+      sample_cntr = 0;
+      done = false;
+      if(anaPin == NULL) break;
+      while (! done) 
+      {
+        if(sample_cntr < pCmd->n_sample) {
+          ti =  micros();
+          for(int d=0; d<N_SENSORS; d++) 
+          {
+            if((1<<d) &  pCmd->devices) // enabled devices
+            {
+              anaBuf[_rx_buf_ptr++] = Board_AnalogRead(d); // (analogRead(anaPin[d]) >> 2); // 10 bit to 8 bit
+            }
+          }
+          sample_cntr++;
+          if(_rx_buf_ptr >= ANA_BUF_SIZE_TOTAL)
+          {
+            done = true; //  Force exit       
+          }
+          val = pCmd->sample_time_us - (micros()-ti); // Auto-Correct sample time
+          if(val>0) delayMicroseconds(val);        
+        } else {
+          done = true;
+        }
+      }
+      Board_TimerStop();
+      Board_AnalogStop();
+      break;
+  } // End Switch
+
+  //-- Return Status
+  return micros() - t0; // elapsed time on RX mode in us
+}
+
+
+//-------------------------------------------
+// Sensor Registers Read
+//-------------------------------------------
+long TdkUssm_RegisterRead (const int txPin, const int rxPin, const int cmdId, uint8_t *rxBytes, int nRxBits) {
+  int val=1, val_z=1;
+  uint32_t timeout=0, ti, dt; 
+  bool done = false, looped = false;
+
+  int bitCntr = 0;
+  int bitId   = 0;
+  int byteId  = 0;
+  int bitVal  = 0;
+  int bitMask = 1<<bitId;
+  int bitDrive = IO_DRIVE_LOW;
+  
+  const long COMMAND_TIMEOUT = 400ul; // Timeout after 400us Silence
+  const long RX_TBIT_LOW_US  = TBIT0_CMP;  // Ideally 100us, but >80us is also acceptable
+
+  //-- Command Header
+  pinMode(txPin, OUTPUT);
+  digitalWrite(txPin, IO_DRIVE_LOW);
+  delayMicroseconds(250);  // TCMD
+  digitalWrite(txPin, IO_RELEASE);
+  delayMicroseconds(40); // TD
+  
+  //-- Send Command
+  bitMask = 1<<(5-1); // Command has 5 bits
+  while(bitMask != 0){
+      bitVal  = cmdId & bitMask;
+      bitDrive = (bitVal == 0) ?  IO_DRIVE_LOW : IO_RELEASE;
+      digitalWrite(txPin, IO_DRIVE_LOW);
+      delayMicroseconds(50);  // Bit phase 0
+      digitalWrite(txPin, bitDrive);
+      delayMicroseconds(50);  // Bit phase 1
+      digitalWrite(txPin, IO_RELEASE);
+      delayMicroseconds(40);  // Bit phase 2 ==> Consider 10us for processing pre & post
+      bitMask = bitMask >> 1; 
+  }
+  
+  //-- Receive Rx-wave
+  pinMode(rxPin, IO_IN_MODE);
+  val = digitalRead(rxPin);
+  val_z = val;
+  timeout = micros() + COMMAND_TIMEOUT;
+  _rx_buf_ptr = 0;
+  done = (nRxBits>0) ? false : true;
+  
+  while (! done) {
+     val = digitalRead(rxPin);
+     ti =  micros();
+     if(val != val_z) {
+        val_z = val;
+        _rx_buf[_rx_buf_ptr].time_us = ti;
+        _rx_buf[_rx_buf_ptr].val =  val;  
+        _rx_buf_ptr++;
+        timeout = ti + COMMAND_TIMEOUT;
+        looped = (timeout <= COMMAND_TIMEOUT) ? true: false;
+        if(_rx_buf_ptr >= WAVE_BUFF_SIZE){
+           done = true; //  Force exit       
+        }
+     } else { // Keep watching
+        if(looped) { // hold-on till ti loops as-well
+          if(ti < COMMAND_TIMEOUT) looped = false;
+        } else if(timeout < ti) { // Finish by Timeout
+          done = true;
+          _rx_buf[_rx_buf_ptr].time_us = ti;
+          _rx_buf[_rx_buf_ptr].val =  val; 
+          _rx_buf_ptr++; 
+        }
+     } // if not changed
+  } // while
+
+  //-- Print Wave for Debug
+//  ComServer_PrintWaveform();
+
+  //-- Convert Rx-Wave to Rx-bits
+  byteId = 0;
+  for(int i=0; i<nRxBits; i+=8){
+    rxBytes[byteId++] = 0; // Clear
+  }
+
+  bitCntr=0;
+  for(int i=_rx_buf_ptr; ((i>0) && (bitCntr<nRxBits)); i--){
+    if((_rx_buf[i].val == 1) && (_rx_buf[i-1].val == 0)) {
+      // bit val
+      dt = _rx_buf[i].time_us - _rx_buf[i-1].time_us;
+      if(dt >= RX_TBIT_LOW_US) {
+        bitVal  = 0;
+      } else {
+        bitVal  = 1;
+      }
+      // bit set
+      bitId   = bitCntr%8;
+      byteId  = bitCntr/8;
+      if(bitVal) {
+        rxBytes[byteId] |= 1<<bitId;
+      }
+      bitCntr++;
+    }
+  } // for _rx_buf
+
+  //-- Return n Rx Bits        
+  return bitCntr; //_rx_buf_ptr; // Wave elements
+}
+
+
+
+
+
+//-------------------------------------------
+// Sensor Registers Write
+//-------------------------------------------
+long TdkUssm_RegisterWrite (const int txPin, const int rxPin, const int cmdId, uint8_t *txBytes, int nTxBits) {
+
+  int bitCntr = 0;
+  int bitId   = nTxBits%8;
+  int byteId  = nTxBits/8;
+  int bitVal  = 0;
+  int bitMask = 1<<bitId;
+  int bitDrive = IO_RELEASE;
+  uint8_t partity_val  = 0;
+  int n_parity_bits = 0;
+
+  //-- Check Parity
+  n_parity_bits = TdkUssm_EvalParity(cmdId, txBytes, &partity_val);
+  
+  //-- Command Header
+  pinMode(txPin, OUTPUT);
+  digitalWrite(txPin, IO_DRIVE_LOW);
+  delayMicroseconds(250);  // TCMD
+  digitalWrite(txPin, IO_RELEASE);
+  delayMicroseconds(40); // TD
+
+  //-- Send Command
+  bitMask = 1<<(5-1); // Command has 5 bits
+  while(bitMask != 0){
+      bitVal  = cmdId & bitMask;
+      bitDrive = (bitVal == 0) ?  IO_DRIVE_LOW : IO_RELEASE;
+      digitalWrite(txPin, IO_DRIVE_LOW);
+      delayMicroseconds(50);  // Bit phase 0
+      digitalWrite(txPin, bitDrive);
+      delayMicroseconds(50);  // Bit phase 1
+      digitalWrite(txPin, IO_RELEASE);
+      delayMicroseconds(40);  // Bit phase 2 ==> Consider 10us for processing pre & post
+      bitMask = bitMask >> 1; 
+  }
+  
+  //-- Send Tx-bits
+  while(nTxBits > 0){
+      nTxBits--; 
+      bitVal  = TdkUssm_GetBit(txBytes, nTxBits);
+      bitDrive = (bitVal == 0) ?  IO_DRIVE_LOW : IO_RELEASE;
+      digitalWrite(txPin, IO_DRIVE_LOW);
+      delayMicroseconds(50);  // Bit phase 0
+      digitalWrite(txPin, bitDrive);
+      delayMicroseconds(50);  // Bit phase 1
+      digitalWrite(txPin, IO_RELEASE);
+      delayMicroseconds(40);  // Bit phase 2 ==> Consider 10us for processing pre & post
+  }
+
+  //-- Send Parity Bits
+  if(n_parity_bits>0) {
+    bitMask = 1<<(n_parity_bits-1); // Command has 5 bits
+  } else { // no parity
+    bitMask = 0;
+  }
+  while(bitMask != 0){
+      bitVal  = partity_val & bitMask;
+      bitDrive = (bitVal == 0) ?  IO_DRIVE_LOW : IO_RELEASE;
+      digitalWrite(txPin, IO_DRIVE_LOW);
+      delayMicroseconds(50);  // Bit phase 0
+      digitalWrite(txPin, bitDrive);
+      delayMicroseconds(50);  // Bit phase 1
+      digitalWrite(txPin, IO_RELEASE);
+      delayMicroseconds(40);  // Bit phase 2 ==> Consider 10us for processing pre & post
+      bitMask = bitMask >> 1; 
+  }
+  
+
+  //-- Return n sent bits
+  return nTxBits + n_parity_bits; // Wave elements
+}
+
+
+//-------------------------------------------
+// Sensor EEPROM Programming (Calibration burn)
+//-------------------------------------------
+long TdkUssm_EepromProgram (const int txPin, const int rxPin, const int progPin, const int cmdId=((const int)CMD_EE_COPY)) {
+  int val=1, val_z=1;
+  uint32_t timeout=0, ti, dt; 
+  bool done = false, looped = false;
+
+  int bitCntr = 0;
+  int bitId   = 0;
+  int byteId  = 0;
+  int bitVal  = 0;
+  int bitMask = 1<<bitId;
+  int bitDrive = IO_DRIVE_LOW;
+  
+  const long COMMAND_TIMEOUT = 400ul; // Timeout after 400us Silence
+  const long RX_TBIT_LOW_US  = 80ul;  // Ideally 100us, but >80us is also acceptable
+
+  //-- Command Header
+  pinMode(txPin, OUTPUT);
+  digitalWrite(txPin, IO_DRIVE_LOW);
+  delayMicroseconds(250);  // TCMD
+  digitalWrite(txPin, IO_RELEASE);
+  delayMicroseconds(40); // TD
+  
+  //-- Send Command
+  bitMask = 1<<(5-1); // Command has 5 bits
+  while(bitMask != 0){
+      bitVal  = cmdId & bitMask;
+      bitDrive = (bitVal == 0) ?  IO_DRIVE_LOW : IO_RELEASE;
+      digitalWrite(txPin, IO_DRIVE_LOW);
+      delayMicroseconds(50);  // Bit phase 0
+      digitalWrite(txPin, bitDrive);
+      delayMicroseconds(50);  // Bit phase 1
+      digitalWrite(txPin, IO_RELEASE);
+      delayMicroseconds(40);  // Bit phase 2 ==> Consider 10us for processing pre & post
+      bitMask = bitMask >> 1; 
+  }
+  
+  //-- Switch IO Pint to input mode if single IO is used
+  pinMode(rxPin, IO_IN_MODE);
+
+  //-- Apply VPP (Programming Voltage)
+  pinMode(progPin, OUTPUT);
+  digitalWrite(progPin, PROG_ENABLE);
+  delayMicroseconds(TVPROG + TPROG);  // TPROG
+  digitalWrite(progPin, PROG_DISABLE);
+  delayMicroseconds(TVPROG); 
+  
+  //-- return timestamp
+  return micros();
+}
+
+
+
+//-------------------------------------------
+// Helper Functions : get bit value
+//-------------------------------------------    
+inline int   TdkUssm_GetBit(uint8_t *buf, uint32_t bit_id){
+  uint32_t i, j;
+  i = (bit_id >> 3); // div by 8
+  j = (bit_id %  8); // reminder
+  return ((buf[i] >> j) & (int)1);
+}
+
+//-------------------------------------------
+// Helper Functions : set bit value
+//------------------------------------------- 
+inline int   TdkUssm_SetBit(uint8_t *buf, uint32_t bit_id, int val){
+  uint32_t i, j;
+  i = (bit_id >> 3); // div by 8
+  j  = (bit_id %  8); // reminder
+  if(val) {
+    buf[i] |= ((uint8_t)1<<j);
+  } else {
+    buf[i] &= ~((uint8_t)1<<j);
+  }
+  return ( buf[i] );
+}
+
+
+//-------------------------------------------
+// Helper Functions : get bits as a uint32 value
+//------------------------------------------- 
+uint32_t  TdkUssm_GetBitsU32(uint8_t *src, uint32_t src_lsb, uint32_t nbit) {
+  uint32_t val32=0ul;
+  for(int i=0; i<nbit; i++) {
+    val32 |= TdkUssm_GetBit(src, src_lsb++) ? (1ul<<i): 0ul;
+  }
+  return val32;
+}
+
+
+//-------------------------------------------
+// Helper Functions : set bit using a uint32 value
+//------------------------------------------- 
+uint32_t  TdkUssm_SetBitsU32(uint8_t *dest, uint32_t dest_lsb, uint32_t nbit, uint32_t val32) {
+  for(int i=0; i<nbit; i++) {
+    TdkUssm_SetBit(dest, dest_lsb++, ((val32>>i)&0x1ul));
+  }
+  return (val32 & ((1<<nbit)-1)); // only valid bits returned
+}
+
+
+//-------------------------------------------
+// Helper Functions : get bit range
+//-------------------------------------------     
+int   TdkUssm_GetBitRange(uint8_t *dest, uint32_t dest_lsb, uint8_t *src, uint32_t src_lsb, uint32_t nbit){
+  for(int i=0; i<nbit; i++) {
+    TdkUssm_SetBit(dest, dest_lsb++, TdkUssm_GetBit(src, src_lsb++));
+  }
+  return nbit;
+}
+
+
+//-------------------------------------------
+// Helper Functions : get number of bytes for n bits
+//------------------------------------------- 
+uint32_t TdkUssm_GetBitsNbyte(uint32_t nbits)
+{
+  uint32_t nbyte=0;
+  nbyte = nbits>>3; // div 8
+  if((nbyte * 8) < nbits) nbyte++;
+  return nbyte;
+}
+
+
+//-------------------------------------------
+// Helper Functions : get even parity
+//------------------------------------------- 
+int  TdkUssm_GetEvenParity(uint8_t *pbuf, uint32_t lsb, uint32_t msb)
+{
+  int  acc =0, val;
+  
+  for(int b=lsb; b<=msb; b++) {
+    val = TdkUssm_GetBit(pbuf, b);
+    acc ^= val;
+  }
+  return acc;
+}
+
+//-------------------------------------------
+// Helper Functions : Get number of Parity bits
+//------------------------------------------- 
+int   TdkUssm_GetParityBits(int cmd_id)
+{
+  int parity_bits=0;
+  
+  switch(cmd_id) {
+    case CMD_MEAS_WRITE :
+      parity_bits = 6;
+      break;
+    case CMD_THRES_A_WRITE :
+    case CMD_THRES_B_WRITE :
+      parity_bits = 6;
+      break;
+    default : return 0;
+  } // end switch
+
+ return parity_bits;
+}
+
+//-------------------------------------------
+// Helper Functions : Evaluate Register Parity
+//------------------------------------------- 
+int   TdkUssm_EvalParity(int cmd_id, uint8_t *src, uint8_t *dest)
+{
+  int even_parity=0ul, parity_bits=0;
+  
+  switch(cmd_id) {
+    case CMD_MEAS_WRITE :
+      parity_bits = 6;
+      even_parity |= (TdkUssm_GetEvenParity(src,  0, 11) << 5);
+      even_parity |= (TdkUssm_GetEvenParity(src, 12, 23) << 4);
+      even_parity |= (TdkUssm_GetEvenParity(src, 24, 35) << 3);
+      even_parity |= (TdkUssm_GetEvenParity(src, 36, 47) << 2);
+      even_parity |= (TdkUssm_GetEvenParity(src, 48, 59) << 1);
+      even_parity |= (TdkUssm_GetEvenParity(src, 60, 72) << 0);
+      break;
+    case CMD_THRES_A_WRITE :
+    case CMD_THRES_B_WRITE :
+      parity_bits = 6;
+      even_parity |= (TdkUssm_GetEvenParity(src,  0, 12) << 5);
+      even_parity |= (TdkUssm_GetEvenParity(src, 13, 25) << 4);
+      even_parity |= (TdkUssm_GetEvenParity(src, 26, 38) << 3);
+      even_parity |= (TdkUssm_GetEvenParity(src, 39, 51) << 2);
+      even_parity |= (TdkUssm_GetEvenParity(src, 52, 65) << 1);
+      even_parity |= (TdkUssm_GetEvenParity(src, 66, 79) << 0);
+      break;
+    default : return 0;
+  } // end switch
+ //-- return parity value
+ *dest = even_parity;
+ return parity_bits;
+}
+
+
+//-------------------------------------------
+// Helper Functions : Is Send Receive Command
+//------------------------------------------- 
+int       TdkUssm_IsSendReceiveCommand(const int cmd_id)
+{
+  if(TdkUssm_IsSendReceiveA(cmd_id)) return 1;
+    
+  if(cmd_id == (int)CMD_SEND_B) return 1;
+  if(cmd_id == (int)CMD_RECEIVE_B) return 1;
+
+  if(cmd_id == (int)CMD_SEND_C) return 1;
+  if(cmd_id == (int)CMD_RECEIVE_C) return 1;
+  if(cmd_id == (int)CMD_RECEIVE_B) return 1;
+  
+  if(cmd_id == (int)CMD_SEND_RECEIVE_B) return 1;
+  if(cmd_id == (int)CMD_SEND_RECEIVE_C) return 1;
+  
+  return 0;
+}
+
+
+
+//-------------------------------------------
+// Helper Functions : Is Send Receive A Profile
+//------------------------------------------- 
+int       TdkUssm_IsSendReceiveA(const int cmd_id){
+   switch(cmd_id) { 
+      case CMD_SEND_A     :
+      case CMD_RECEIVE_A  :
+      case CMD_SEND_RECEIVE_A:
+      case CMD_SEND_RECEIVE_AH:
+      case CMD_JTAG_SEND_A          :
+      case CMD_JTAG_RECEIVE_A       :
+      case CMD_JTAG_SEND_RECEIVE    :
+      case CMD_JTAG_THRESH_READ     :
+      case CMD_JTAG_ENVTHRES_READ   :
+        return 1;
+
+      default: 
+        return 0;
+   }     
+}
+
+
+/**************************
+* Calibrations checks
+*/
+//-------------------------------------------
+//  Helper Functions: Sequence Check Done
+//-------------------------------------------
+uint32_t TdkUssm_SequenceCheckDone(int deviceId, const char *chekStr, char *respStr) {
+  int fosc = 40000;
+  bool ret = true;
+  uint32_t check_mask = 0ul;
+  int d = deviceId;
+
+  sprintf(respStr, "nop[%d]", d);
+  check_mask = 0;
+  
+      if(! strcmp(chekStr, "OSC_INIT")) {  
+        sprintf(respStr, "set[%d] F_DRV %d -r", d, fosc);   
+      } else if(! strcmp(chekStr, "OSC_CHK")) {
+        //-- Trimm Oscillator
+        uint32_t tcal_us = _data[d].tcal_us;
+        uint32_t fdrv_hz = _data[d].freq_hz; 
+        int      trim_val= 200*(fdrv_hz - fosc)/fosc; 
+        trim_val = trim_val & 0xf;
+        if(trim_val) {
+          sprintf(respStr, "set[%d] OSC_TRIM %d ; nop %d_%d_%d ", d, trim_val, fosc, trim_val, fdrv_hz);
+        } else {
+          check_mask |= 1ul<<d;
+        }
+        
+      } else if(! strcmp(chekStr, "FDRV_CHK")) {
+        //-- Calibrate Frequency
+        int32_t fdev   = TdkUssm_GetBitsU32(_data[d].status,  0, 5);
+        if (fdev > 15) fdev = fdev - 32;
+        int32_t fdrv = TdkUssm_GetBitsU32(_data[d].calib , 36, 8);         
+        int32_t new_fdrv = fdrv - fdev;
+        if(new_fdrv < 0) new_fdrv = 0;
+        else if(new_fdrv > 255)   new_fdrv = 255;       
+        if(fdev) {
+          sprintf(respStr, "set[%d] F_DRV %d ; nop %d_%d_%d__%x ", d, new_fdrv, fdrv,fdev,new_fdrv, check_mask);  
+        } else {
+          check_mask |= 1ul<<d;
+        }  
+        
+      } else if(! strcmp(chekStr, "GAIN_CHK")) {
+        //-- Calibrate Gain
+        check_mask |= 1ul<<d;  // [TODO] : Implement the algorithm  ... for now just Skip it :-)
+      }
+
+  return check_mask; //Criteria met
+}
+
+
+/**************************
+* Set/Get Parameter
+*/
+//-------------------------------------------
+// Helper Functions : Get Register Command
+//------------------------------------------- 
+const eTdkUssmCmdStruct *TdkUssm_GetCommandByIds(unsigned char CmdId) {
+  for (int i = 0; i < TDK_USSM_N_CMD; i++) {
+    if (C_TDK_USSM_CMD[i].id == CmdId) {
+      return &C_TDK_USSM_CMD[i];
+    }
+  }
+  return NULL;
+}
+
+
+//-------------------------------------------
+// Helper Functions : Get Parameter Element Ids
+//------------------------------------------- 
+bool  TdkUssm_GetParamElementIds(const char *pName, uint8_t *table_id, uint8_t *elem_id, uint32_t *lsb, uint8_t *nbit, uint32_t *reset_val) {
+  eParameterElement *pelem = NULL;
+  for(uint8_t t=0; t<__N_ParamTableID; t++) { // Tables
+    for(uint8_t e=0; e<C_PARAM_TABLES[t].size; e++) { // elements
+      if(!strcmp(pName,C_PARAM_TABLES[t].ptable[e].name)) {
+        pelem = (eParameterElement *)&C_PARAM_TABLES[t].ptable[e];
+        *table_id = t;
+        *elem_id  = e;
+        *lsb      = pelem->lsb;
+        *nbit     = pelem->nbit;
+        *reset_val= pelem->val;   
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+
+//-------------------------------------------
+// Helper Functions : Get Parameter Value
+//------------------------------------------- 
+bool  TdkUssm_GetParamVal(const char *pName, uint32_t *pVal, unsigned char *pReg){
+  char str[256]; 
+  bool valid = false;
+  uint8_t tid, eid, nbit;
+  uint32_t lsb, rst_val;
+  
+  valid = TdkUssm_GetParamElementIds(pName, &tid, &eid, &lsb, &nbit, &rst_val);
+  if(valid) {
+    if((eParameterTableID)tid == SOFT_PARAM) { // Board parameters
+      switch((eSoftwareParamID)eid) {
+        *pVal = C_SOFT_PARAM[eid].val;
+      }
+    } else { // sensor params
+      *pVal = TdkUssm_GetBitsU32(pReg, lsb, nbit);
+    }
+//    if(verbose) { // Print if required
+//      sprintf(str,"TdkUssm[%d].%s.%s = %d\n",i,C_PARAM_TABLES[tid].pname,pName,val);
+//      ComServer_Println(str);
+//    }
+    return true;
+  } else { //-- Not found
+    return false; // No equivalent parameter found
+  }
+}
+
+
+//-------------------------------------------
+// Helper Functions : Set Parameter Element
+//------------------------------------------- 
+bool  TdkUssm_SetParamVal(const char *pName, uint32_t val, unsigned char *pReg){
+  bool valid = false;
+  uint8_t tid, eid, nbit;
+  uint32_t lsb, rst_val;
+  eLUTStruct *lut;
+  
+  valid = TdkUssm_GetParamElementIds(pName, &tid, &eid, &lsb, &nbit, &rst_val);
+  if(valid) {
+    if((eParameterTableID)tid == SOFT_PARAM) { // Board parameters
+      switch((eSoftwareParamID)eid) {
+        C_SOFT_PARAM[eid].val = val;
+      }
+    } else { // sensor params
+      TdkUssm_SetBitsU32(pReg, lsb, nbit, val);
+    }
+//    if(verbose) {
+//      sprintf(str,"TdkUssm[%d].%s.%s = %d\n",i,C_PARAM_TABLES[tid].pname,pName,val);
+//      ComServer_Println(str);
+//    }
+    return true;
+  } else { //-- Not found
+    return false; // No equivalent parameter found
+  }
+}
+
+
+//-------------------------------------------
+// Helper Functions : TdkUssm_GetCommandSequence
+//-------------------------------------------
+const char**   TdkUssm_GetCommandSequence(unsigned char CmdId) {
+  switch(CmdId){
+    case CMD_READ_ALL:        return C_SEQ_READ_ALL;
+    case CMD_CAL_FDRV:        return C_SEQ_CALIBRATE_FDRV;
+    case CMD_CAL_OSCILLATOR:  return C_SEQ_CALIBRATE_OSC;
+    case CMD_CAL_GAIN:        return C_SEQ_CALIBRATE_GAIN;
+    default :
+      return NULL;
+  }
+}
+
+//-------------------------------------------
+// Helper Functions : JTAG Interface Reset
+//-------------------------------------------
+void      TdkUssm_JtagReset(int tckPin, int tmsPin) {
+  //-- Setup
+  pinMode(tckPin, OUTPUT);
+  pinMode(tmsPin, OUTPUT);
+  digitalWrite(tckPin, LOW);
+  digitalWrite(tmsPin, LOW);
+
+  //-- TMS High for 5 TCK to reset FSM
+  digitalWrite(tmsPin, HIGH);
+  for(int i=0; i<5; i++){
+    delayMicroseconds(10);
+    digitalWrite(tckPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(tckPin, LOW);
+  }
+  digitalWrite(tmsPin, LOW);
+  
+  //-- One extra TCK to set FSM to default state
+  delayMicroseconds(10);
+  digitalWrite(tckPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(tckPin, LOW);  
+}
+
+
+//-------------------------------------------
+// Helper Functions : JTAG Setup
+//-------------------------------------------
+void      TdkUssm_JtagSetup(int mode, int tckPin, int tmsPin, int tdiPin){
+  uint32_t tms_val, tdi_val; 
+  //-- Pin Setup
+  pinMode(tckPin, OUTPUT);
+  pinMode(tmsPin, OUTPUT);
+  pinMode(tdiPin, OUTPUT);
+  digitalWrite(tckPin, LOW);
+  digitalWrite(tmsPin, LOW);
+  digitalWrite(tdiPin, LOW);
+
+  //-- IR Value select
+  tms_val = ELM_JTAG_TMS_IR_SET;
+  tdi_val = mode<<5;  
+
+  //-- Shift out IR
+  for(int i=0; i<18; i++){
+    digitalWrite(tckPin, LOW);
+    if(tms_val & 0x8000) {
+      digitalWrite(tmsPin, HIGH);
+    } else {
+      digitalWrite(tmsPin, LOW);
+    }
+    if(tdi_val & 0x01) {
+      digitalWrite(tdiPin, HIGH);
+    } else {
+      digitalWrite(tdiPin, LOW);
+    }    
+    delayMicroseconds(5);
+    tms_val = tms_val<<1;
+    tdi_val = tdi_val>>1;
+    digitalWrite(tckPin, HIGH);    
+    delayMicroseconds(5);
+  }
+  //-- Set TCK to default LOW state
+  digitalWrite(tckPin, LOW);
+}
+
+
+
+//-------------------------------------------
+// HAL Functions : JTAG Capture over Single SPI
+//-------------------------------------------
+uint32_t  TdkUssm_JtagCaptureSPIDummy(int mosiPin, int misoPin, int sckPin, int nSample, int delayTime_us, uint8_t *pBuf, int nBit, int rxPin){
+  int cntr=0;
+  long t0, frame_time_us;
+
+  t0=micros();
+  switch(nBit) {
+    case 32:
+      cntr = 0;
+      for(int s=0; s<nSample; s++) { // Samples 
+        if(delayTime_us){
+          delayMicroseconds(delayTime_us);
+        }
+        pBuf[cntr++] = (uint8_t)(s&0xff);      // MSB = Envelop 
+        pBuf[cntr++] = (uint8_t)(s&0xff);// LSB = Threshold
+      }
+      frame_time_us = micros() - t0;
+      return (frame_time_us);
+      
+    default:
+      for(int s=0; s<nSample; s++) { // Samples 
+        if(delayTime_us){
+          delayMicroseconds(delayTime_us);
+        }
+        pBuf[s] = (uint8_t)(s&0xff);
+      }
+      frame_time_us = micros() - t0;
+      return (frame_time_us);
+  }
+}
+
+
+
+//-------------------------------------------
+// HAL Functions : JTAG Capture over Single SPI
+//-------------------------------------------
+uint32_t  TdkUssm_JtagCaptureSPI(int mosiPin, int misoPin, int sckPin, int nSample, int delayTime_us, uint8_t *pBuf, int nBit, int rxPin){
+#ifdef JTAG_N_PORT
+  SPIClass jtag(mosiPin, misoPin, sckPin); 
+  uint32_t t0, frame_time_us=0, spi_rx32, cntr=0;
+  uint16_t spi_rx, spi_rx1, spi_tx;
+
+  jtag.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+  t0 = micros();
+  switch(nBit) {
+    case 32:
+      cntr = 0;
+      for(int s=0; s<nSample; s++) { // Samples 
+        spi_rx1 = jtag.transfer16(ELM_JTAG_TMS_SHIFT_DR20_MSB);
+        spi_rx = jtag.transfer16(ELM_JTAG_TMS_SHIFT_DR20_LSB);
+        spi_rx32 = (spi_rx1<<16) | spi_rx ;
+        if(delayTime_us){
+          delayMicroseconds(delayTime_us);
+        }
+        pBuf[cntr++] = (uint8_t)(spi_rx32>>(10+4));      // 1. MSB = Envelop 
+        pBuf[cntr++] = (uint8_t)((spi_rx32>>(4+2))&0xff);// 2. LSB = Threshold
+        pBuf[cntr++] = (uint8_t)(digitalRead(rxPin));    // 3. IO Status
+      }
+      frame_time_us = micros() - t0;
+      return (frame_time_us);
+      
+    default:
+      for(int s=0; s<nSample; s++) { // Samples 
+        spi_rx= jtag.transfer16(ELM_JTAG_TMS_SHIFT_DR10);
+        if(delayTime_us){
+          delayMicroseconds(delayTime_us);
+        }
+        pBuf[s] = (uint8_t)(spi_rx>>4);
+      }
+      frame_time_us = micros() - t0;
+      return (frame_time_us);
+  }
+#endif // JTAG_N_PORT
+  return 0;
+}
+
+
+//-------------------------------------------
+// Helper Functions : JTAG Capture Envelop
+//-------------------------------------------
+uint32_t  TdkUssm_JtagCaptureEnvelop(eTdkUssmCmdExecStruct *pCmd , int mode, uint8_t *pBuf) {
+  uint32_t sampleTime_us =  pCmd->sample_time_us;
+  uint32_t nSample =  pCmd->n_sample;
+  uint32_t frame_time_us;
+  int delay_us = 0;
+  int devId = 0;
+  int nbit;
+
+ #ifdef JTAG_N_PORT
+
+  //--[TODO] Improve for parallel devices 
+  //-- Select First device
+  for(int i=0; i<JTAG_N_PORT; i++) {
+    if(pCmd->devices & 1ul<<i) {
+      devId = i;
+      break;
+    }
+  }
+
+  //-- Extra delay after each sample
+  if((eTdkUssmJTAGMode)mode == ELM_JTAG_READ_ENVTHRES) nbit=32;
+  else nbit=16;
+  delay_us = sampleTime_us - nbit; // nbit*1us per frame
+  if(delay_us<0) delay_us=0;
+  
+  pinMode(JtagTmenPin[devId], OUTPUT);
+  digitalWrite(JtagTmenPin[devId], HIGH);
+  TdkUssm_JtagReset(JtagTckPin[devId], JtagTmsPin[devId]);
+  TdkUssm_JtagSetup(mode, JtagTckPin[devId], JtagTmsPin[devId], JtagTdiPin[devId]);
+  TdkUssm_WaveGenCapture(pCmd, TriggerPin, EchoPin, NULL, 0, NULL, 0, ProgPin, AnaPin, pBuf);
+  
+//  #ifdef TDK_USSM_Lab_Board
+//    frame_time_us = TdkUssm_JtagCaptureSPIDummy(JtagTmsPin[devId], JtagTdoPin[devId], JtagTckPin[devId], nSample, delay_us, pBuf, nbit,  EchoPin[devId]);
+//  #else // Use Dummy function
+    frame_time_us = TdkUssm_JtagCaptureSPI(JtagTmsPin[devId], JtagTdoPin[devId], JtagTckPin[devId], nSample, delay_us, pBuf, nbit,  EchoPin[devId]);
+//  #endif
+  digitalWrite(JtagTmenPin[devId], LOW);
+
+  if(nSample>0) return frame_time_us/nSample;
+  else return 0;
+ #endif
+  return 0;
+}
+
+
+
+//###################################################################################################
+// Extra Functions Board Dependent
+//###################################################################################################
+
+#ifdef ADAFRUIT_FEATHER_32U4
+//-------------------------------------------
+// Board Function : AdaFruitBLE Setup
+//-------------------------------------------
+void Board_AdaFruitBLE_Setup(void) {
+//  while (!Serial);  // required for Flora & Micro
+//  delay(500);
+
+//  Serial.begin(115200);
+//  Serial.println(F("Adafruit Bluefruit Command Mode Example"));
+//  Serial.println(F("---------------------------------------"));
+//
+//  /* Initialise the module */
+//  Serial.print(F("Initialising the Bluefruit LE module: "));
+//
+  if ( !ble.begin(VERBOSE_MODE) )
+  {
+//    Serial.println(F("ERROR: Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
+//    //while(1);
+  }
+//  Serial.println( F("OK!") );
+//
+  if ( FACTORYRESET_ENABLE )
+  {
+    /* Perform a factory reset to make sure everything is in a known state */
+    Serial.println(F("Performing a factory reset: "));
+    if ( ! ble.factoryReset() ){
+      Serial.println(F("ERROR: Couldn't factory reset"));
+      //while(1);
+    }
+  }
+
+  /* Disable command echo from Bluefruit */
+  ble.echo(false);
+
+//  Serial.println("Requesting Bluefruit info:");
+//  /* Print Bluefruit information */
+//  ble.info();
+
+//  Serial.println(F("Please use Adafruit Bluefruit LE app to connect in UART mode"));
+//  Serial.println(F("Then Enter characters to send to Bluefruit"));
+//  Serial.println();
+
+  ble.verbose(false);  // debug info is a little annoying after this point!
+
+  /* Wait for connection */
+  while (! ble.isConnected()) {
+      delay(500);
+  }
+
+  // LED Activity command is only supported from 0.6.6
+  if ( ble.isVersionAtLeast(MINIMUM_FIRMWARE_VERSION) )
+  {
+    // Change Mode LED Activity
+//    Serial.println(F("******************************"));
+//    Serial.println(F("Change LED activity to " MODE_LED_BEHAVIOUR));
+    ble.sendCommandCheckOK("AT+HWModeLED=" MODE_LED_BEHAVIOUR);
+
+    // Set module to DATA mode
+//    Serial.println( F("Switching to DATA mode!") );
+    ble.setMode(BLUEFRUIT_MODE_DATA);
+//    Serial.println(F("******************************"));
+  }
+}
+
+
+void Board_AdaFruitBLE_Write(const char* txStr){
+    // Send characters to Bluefruit
+//    Serial.print("[Send] ");
+//    Serial.println(txStr);
+
+//    ble.print("AT+BLEUARTTX=");
+    ble.println(txStr);
+
+    // check response stastus
+//    if (! ble.waitForOK() ) {
+//      Serial.println(F("Failed to send?"));
+//    }
+}
+
+void Board_AdaFruitBLE_Read(char* rxStr, int maxSize){
+  // Check for incoming characters from Bluefruit
+  ble.println("AT+BLEUARTRX");
+  ble.readline();
+  if (strcmp(ble.buffer, "OK") == 0) {
+    // no data
+    rxStr[0] = '\0';
+    return;
+  } else {
+    // Some data was found, its in the buffer
+    //Serial.print(F("[Recv] ")); Serial.println(ble.buffer); 
+    ble.waitForOK();
+    strncpy(rxStr, ble.buffer, maxSize);
+  }
+}
+
+/*---------------------------------------
+ * Function to perform jump to system memory boot from user application
+ * User Flach option bits which allows to trigger the bootloader from Software
+ * in STM32L4xx series
+ */
+void Board_JumpToBootloader(uint32_t password) {
+    char str[128];
+    sprintf(str,"%s.BOOT = { 00000000 }", BOARD_NAME, password);
+    ComServer_Println(str);
+    ComServer_Println(COM_RESPONSE_TERMINATOR);
+    // TODO: Start Boot loader for Adafruit
+}
+
+
+#endif
+
+
+
+//-------------------------------------------
+// Board Function : Lab_Board Diagnosis
+//-------------------------------------------
+#ifdef TDK_USSM_Lab_Board
+void Board_LabBoardDiagnosis(int sel) {
+  char str[256]; 
+  
+  sprintf(str, "  %d :", sel);
+  ComServer_Print(str);
+  switch(sel) {
+    case 0  : /*Init();*/  sprintf(str," Init  DONE \n"); break;
+      
+    case 1  : sprintf(str," LED_1  ON  \n");  pinMode(Leds[0], OUTPUT); digitalWrite(Leds[0], LOW);   break;    
+    case 2  : sprintf(str," LED_2  ON  \n");  pinMode(Leds[1], OUTPUT); digitalWrite(Leds[1], LOW);    break;    
+    case 3  : sprintf(str," LED_3  ON  \n");  pinMode(Leds[2], OUTPUT); digitalWrite(Leds[2], LOW);    break;    
+    case 4  : sprintf(str," LED_4  ON  \n");  pinMode(Leds[3], OUTPUT); digitalWrite(Leds[3], LOW);    break;    
+  
+    case 5  : sprintf(str," LED_1  OFF \n");  pinMode(Leds[0], OUTPUT); digitalWrite(Leds[0], HIGH);    break;    
+    case 6  : sprintf(str," LED_2  OFF \n");  pinMode(Leds[1], OUTPUT); digitalWrite(Leds[1], HIGH);    break;    
+    case 7  : sprintf(str," LED_3  OFF \n");  pinMode(Leds[2], OUTPUT); digitalWrite(Leds[2], HIGH);    break;    
+    case 8  : sprintf(str," LED_4  OFF \n");  pinMode(Leds[3], OUTPUT); digitalWrite(Leds[3], HIGH);    break;    
+      
+    case 9  : sprintf(str," ALL LEDS OFF \n"); 
+                for(int i=0; i<N_LED; i++) { pinMode(Leds[i], OUTPUT); digitalWrite(Leds[i], HIGH); }
+              break;   
+  
+    case 10 : for(int i=0; i<N_SENSORS; i++) { pinMode(PullupPin[i], OUTPUT); digitalWrite(PullupPin[i], LOW); }
+              sprintf(str," dut_dio_pullup = %d \n", digitalRead(PullupPin[1])<<1 | digitalRead(PullupPin[0])) ; 
+              break;
+    case 11 : for(int i=0; i<N_SENSORS; i++) { pinMode(PullupPin[i], OUTPUT); digitalWrite(PullupPin[i], HIGH); }
+              sprintf(str," dut_dio_pullup = %d \n", digitalRead(PullupPin[1])<<1 | digitalRead(PullupPin[0])) ; 
+              break;
+
+    case 12 : pinMode(ProgPin[0], OUTPUT); digitalWrite(ProgPin[0], 0); 
+              sprintf(str," DUT_PROG = %d \n", digitalRead(ProgPin[0])) ; 
+              break;
+    case 13 : pinMode(ProgPin[0], OUTPUT); digitalWrite(ProgPin[0], 1);
+              sprintf(str," DUT_PROG = %d \n", digitalRead(ProgPin[0])) ; 
+              break;
+    
+    case 14 : { int val=0;
+                for(int i=0; i<N_SENSORS; i++) { pinMode(EchoPin[i], INPUT); val |= (digitalRead(EchoPin[i])<<i); }
+                sprintf(str," DUT_DI     = 0x%04x \n", val) ; 
+              }
+              break;  
+         
+    case 15 : pinMode(FB_12V    , INPUT); sprintf(str," FB_12V      %d     \n", digitalRead(FB_12V    )) ; break; 
+    case 16 : pinMode(FB_24V    , INPUT); sprintf(str," FB_24V      %d     \n", digitalRead(FB_24V    )) ; break; 
+    case 17 : pinMode(FB_3V3_EXT, INPUT); sprintf(str," FB_3V3_EXT  %d     \n", digitalRead(FB_3V3_EXT)) ; break; 
+
+    case 18 : pinMode(BUZZER, OUTPUT); sprintf(str," BUZZER  ON    \n"); digitalWrite(BUZZER, LOW); /* Board_LabBoardBuzzerOn(2000) ; */ break;  
+    case 19 : pinMode(BUZZER, OUTPUT); sprintf(str," BUZZER= OFF   \n"); digitalWrite(BUZZER, LOW); /* Board_LabBoardBuzzerOff() ;   */ break; 
+    
+    case 20 ... 27:
+              {
+                int val=0;
+                for(int i=0; i<N_SENSORS; i++) {
+                  pinMode(TriggerPin[i], OUTPUT);
+                  if(i==(sel-20)) digitalWrite(TriggerPin[i], HIGH);
+                  val |=(digitalRead(TriggerPin[i])<<i); 
+                }   
+                sprintf(str," DUT_DO = 0x%04x \n", val) ; 
+              }
+              break;
+    case 28 : 
+              {
+                int val=0;
+                for(int i=0; i<N_SENSORS; i++) {
+                  pinMode(TriggerPin[i], OUTPUT);
+                  digitalWrite(TriggerPin[i], HIGH);
+                  val |=(digitalRead(TriggerPin[i])<<i); 
+                }   
+                sprintf(str," DUT_DO = 0x%04x \n", val) ; 
+              }
+              break;
+    case 29 :   
+              {
+                int val=0;
+                for(int i=0; i<N_SENSORS; i++) {
+                  pinMode(TriggerPin[i], OUTPUT);
+                  digitalWrite(TriggerPin[i], LOW);
+                  val |=(digitalRead(TriggerPin[i])<<i); 
+                }   
+                sprintf(str," DUT_DO = 0x%04x \n", val) ; 
+              }
+              break;
+    
+    case 30 : sprintf(str," EN_12V       OFF \n") ; pinMode(EN_12V, OUTPUT); digitalWrite(EN_12V, LOW );  break;  
+    case 31 : sprintf(str," EN_12V       ON  \n") ; pinMode(EN_12V, OUTPUT); digitalWrite(EN_12V, HIGH);  break;  
+    
+    case 32 : sprintf(str," EN_24V       OFF \n") ; pinMode(EN_24V, OUTPUT); digitalWrite(EN_24V, LOW );  break;  
+    case 33 : sprintf(str," EN_24V       ON  \n") ; pinMode(EN_24V, OUTPUT); digitalWrite(EN_24V, HIGH);  break;  
+    
+    case 34 : sprintf(str," EN_VPROG     OFF \n") ; pinMode(ProgPin[0], OUTPUT); digitalWrite(ProgPin[0], LOW );      break;  
+    case 35 : sprintf(str," EN_VPROG     ON  \n") ; pinMode(ProgPin[0], OUTPUT); digitalWrite(ProgPin[0], HIGH);      break;  
+    
+    case 36 : sprintf(str," EN_PULLUP03  OFF \n") ; pinMode(PullupPin[0], OUTPUT); digitalWrite(PullupPin[0], LOW );   break;  
+    case 37 : sprintf(str," EN_PULLUP03  ON  \n") ; pinMode(PullupPin[0], OUTPUT); digitalWrite(PullupPin[0], HIGH);   break;  
+    
+    case 38 : sprintf(str," EN_PULLUP47  OFF \n") ; pinMode(PullupPin[4], OUTPUT); digitalWrite(PullupPin[4], LOW );   break;  
+    case 39 : sprintf(str," EN_PULLUP47  ON  \n") ; pinMode(PullupPin[4], OUTPUT); digitalWrite(PullupPin[4], HIGH);   break;  
+    
+    case 40 : sprintf(str," LIN_EN_03    OFF \n") ; pinMode(LinEnPin[0], OUTPUT); digitalWrite(LinEnPin[0], LOW );  break;  
+    case 41 : sprintf(str," LIN_EN_03    ON  \n") ; pinMode(LinEnPin[0], OUTPUT); digitalWrite(LinEnPin[0], HIGH);   break;  
+    
+    case 42 : sprintf(str," LIN_EN_47    OFF \n") ; pinMode(LinEnPin[4], OUTPUT); digitalWrite(LinEnPin[4], LOW );   break;  
+    case 43 : sprintf(str," LIN_EN_47    ON  \n") ; pinMode(LinEnPin[4], OUTPUT); digitalWrite(LinEnPin[4], HIGH);   break;  
+
+    //--  JTAG    
+    case 50 : sprintf(str," SPI  ports test removed ...  \n");  break;
+    case 51 : sprintf(str," JTAG Ports test removed ...  \n");  break;  
+    case 52 : sprintf(str," JTAG Ports test removed ...  \n");  break;  
+    case 53 : sprintf(str," JTAG Ports test removed ...  \n");  break; 
+    
+    //-- TODO : SENSOR    
+    case 60 : sprintf(str," sht30_test test removed ...  \n");   break;   //sht30_test(); break;  
+
+    //-- TODO : FLASH / CALIB   
+    default : break;
+    
+  }
+  ComServer_Print(str);
+}
+
+
+/*---------------------------------------
+ * Function to perform jump to system memory boot from user application
+ * User Flach option bits which allows to trigger the bootloader from Software
+ * in STM32L4xx series
+ */
+void Board_JumpToBootloader(uint32_t password) {
+    char str[128];
+    sprintf(str,"%s.BOOT = { %08X }", BOARD_NAME, password);
+    ComServer_Println(str);
+    ComServer_Println(COM_RESPONSE_TERMINATOR);
+    delay(200);
+    /* Send welcome message on startup. */
+    (*((uint32_t*)(0x2001FFF0ul)) = password);  // Enable Bootloader
+    HAL_NVIC_SystemReset();
+}
+
+#endif // TDK_USSM_Lab_Board
+
+
+
+//-------------------------------------------
+// Board Function : Demo_Board Diagnosis
+//-------------------------------------------
+#ifdef TDK_USSM_Demo_Board
+void Board_DemoBoardDiagnosis(int sel){
+  char str[128];
+  sprintf(str, "  %d :", sel);
+  ComServer_Print(str);
+  switch(sel){
+    case 0: // Init
+          //_hal_clock_init();
+          _hal_adc_init();
+          _hal_timer_init();
+          break;
+    case 2:
+        pinMode(SYS_LED, OUTPUT);
+        digitalWrite(SYS_LED, 1);
+        sprintf(str," LED OFF");
+      break;
+    case 1:
+        pinMode(SYS_LED, OUTPUT);
+        digitalWrite(SYS_LED, 0);
+        sprintf(str," LED ON");
+      break;
+  }
+  ComServer_Println(str);
+}
+
+/*---------------------------------------
+ * Function to perform jump to system memory boot from user application
+ * User Flach option bits which allows to trigger the bootloader from Software
+ * in STM32L4xx series
+ */
+void Board_JumpToBootloader(uint32_t password) {
+    char str[128];
+    sprintf(str,"%s.BOOT = { %08X }", BOARD_NAME, password);
+    ComServer_Println(str);
+    ComServer_Println(COM_RESPONSE_TERMINATOR);
+    delay(200);
+    /* Send welcome message on startup. */
+    (*((uint32_t*)0x2000FFF0) = password);  // Enable Bootloader
+    HAL_NVIC_SystemReset();
+}
+
+
+/*----------------------------
+ * Low Level HAL Functions
+ * System Clock Config
+ */
+void _hal_clock_init(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 20;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/*----------------------------
+ * Low Level HAL Functions
+ * ADC1 Config
+ */
+/* ADC1 init function */
+void _hal_adc_init(void)
+{
+  ADC_ChannelConfTypeDef sConfig = {0};
+  ADC_HandleTypeDef* adcHandle = &hadc1;
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+  
+  /** Common config
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc1.Init.Resolution = ADC_RESOLUTION_8B;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.LowPowerAutoWait = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.NbrOfConversion = 2;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc1.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_15;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_16;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if(adcHandle->Instance==ADC1)
+  {
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+    PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_SYSCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* ADC1 clock enable */
+    __HAL_RCC_ADC_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    /**ADC1 GPIO Configuration
+    PB0     ------> ADC1_IN15
+    PB1     ------> ADC1_IN16
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_1 | GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /* ADC1 DMA Init */
+    /* ADC1 Init */
+    /* DMA controller clock enable */
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    
+    hdma_adc1.Instance = DMA1_Channel1;
+    hdma_adc1.Init.Request = DMA_REQUEST_0;
+    hdma_adc1.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_adc1.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_adc1.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdma_adc1.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+    hdma_adc1.Init.Mode = DMA_CIRCULAR;
+    hdma_adc1.Init.Priority = DMA_PRIORITY_HIGH;
+    if (HAL_DMA_Init(&hdma_adc1) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(adcHandle,DMA_Handle,hdma_adc1);
+  }
+}
+
+
+/* USER CODE BEGIN 1 */
+inline void _hal_adc_start(void)
+{
+  HAL_ADC_Start_DMA(&hadc1, _hal_dma_buf, _hal_n_channels);
+}
+
+inline void _hal_adc_stop(void)
+{
+  HAL_ADC_Stop_DMA(&hadc1);
+}
+
+
+inline int _hal_adc_get_value(int index)
+{
+    return (int)_hal_dma_buf[index];
+}
+
+
+/*----------------------------
+ * HAL Functions: DI -> IC -> TIM -> DMA
+ * For Envelop over IO Functions
+ */
+void  _hal_timer_init(void)
+{
+  uint32_t                _hal_timer_freq_hz;
+  GPIO_InitTypeDef        GPIO_InitStruct = {0};
+  TIM_ClockConfigTypeDef  sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef      sConfigIC = {0};
+  TIM_HandleTypeDef*      tim_baseHandle = &htim2;
+
+  //-- Power-ON  Modules 
+  __HAL_RCC_TIM2_CLK_ENABLE();
+
+ //-- Init Timer
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 0xfffffffful;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity  = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+//  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_4) != HAL_OK)
+//  {
+//    Error_Handler();
+//  }
+
+    /*------------------*/
+    /**TIM2 GPIO Configuration
+    PA1     ------> TIM2_CH2
+    PA3     ------> TIM2_CH4
+    */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_1; // GPIO_PIN_3;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /* TIM2 DMA Init */
+    /* TIM2_CH2_CH4 Init */
+    hdma_tim2_ch2_ch4.Instance = DMA1_Channel7;
+    hdma_tim2_ch2_ch4.Init.Request = DMA_REQUEST_4;
+    hdma_tim2_ch2_ch4.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_tim2_ch2_ch4.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_tim2_ch2_ch4.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_tim2_ch2_ch4.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdma_tim2_ch2_ch4.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+    hdma_tim2_ch2_ch4.Init.Mode = DMA_NORMAL;
+    hdma_tim2_ch2_ch4.Init.Priority = DMA_PRIORITY_HIGH;
+    if (HAL_DMA_Init(&hdma_tim2_ch2_ch4) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Several peripheral DMA handle pointers point to the same DMA handle.
+     Be aware that there is only one channel to perform all the requested DMAs. */
+     
+    __HAL_LINKDMA(tim_baseHandle,hdma[TIM_DMA_ID_CC2],hdma_tim2_ch2_ch4);
+//    __HAL_LINKDMA(tim_baseHandle,hdma[TIM_DMA_ID_CC4],hdma_tim2_ch2_ch4);
+
+
+    //-- Capture Frequeny used for the Timer:
+    _hal_timer_freq_hz  = HAL_RCC_GetPCLK1Freq();  // TIM2 Clock is on APB1 
+    _hal_timer_freq_Mhz = ((_hal_timer_freq_hz/((htim2.Init.Prescaler+1) * 1000000ul)));
+
+}
+
+/*---
+ * Timer Start
+ */
+inline uint32_t _hal_timer_start(int mask)
+{  
+  uint32_t dma_mask = 0ul;
+  
+  _hal_timer_init(); // ?????
+
+  //-- Start Timer
+//  if(mask&0x1ul) {
+    HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_2, (uint32_t *)_hal_dma_buf, _HAL_DMA_BUF_SIZE);
+    dma_mask = 0x1ul;
+//  } else if(mask&0x2) {
+//    HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_4, (uint32_t *)_hal_dma_buf, _HAL_DMA_BUF_SIZE);  // Sensor0 and Sensor1 use same Channel !!  
+//    dma_mask = 0x2ul;
+//  }
+  __HAL_DMA_ENABLE(&hdma_tim2_ch2_ch4);
+  __HAL_TIM_SET_COUNTER(&htim2, 0ul);
+  
+  return dma_mask;
+}
+
+/*---
+ * Timer Stop
+ */
+inline void _hal_timer_stop(void)
+{
+  //-- TODO 
+  HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_4);
+  __HAL_TIM_SET_COUNTER(&htim2, 0ul);
+
+ //__HAL_DMA_DISABLE(&hdma_tim2_ch2_ch4);
+  HAL_DMA_Abort(&hdma_tim2_ch2_ch4);
+ // [TODO] : Enhance this to restart just DMA instead of whole reinit ?????
+ HAL_DMA_DeInit(&hdma_tim2_ch2_ch4);
+ //hdma_tim2_ch2_ch4.Instance->CNDTR = 0;
+
+}
+
+
+#endif // TDK_USSM_Lab_Board
