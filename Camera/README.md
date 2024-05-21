@@ -1,5 +1,5 @@
 https://store.stereolabs.com/collections/cameras
 
-we confirmed ZED2I
+we confirmed ZEDX
 
 need to check the best
