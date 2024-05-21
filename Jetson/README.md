@@ -1,7 +1,5 @@
-https://www.seeedstudio.com/catalog/category/view/s/SBC-Nvidia-c-2037/id/2037/
+https://www.seeedstudio.com/NVIDIArJetson-AGX-Orintm-64GB-Developer-Kit-p-5641.html
 
-https://store.stereolabs.com/collections/embedded-systems
 
-List of Jetson need to choose the best
-
-![image](https://github.com/iinsala/components_data/assets/72552845/0b355c5c-4eb1-4c96-8d49-c24e0f18f3ad)
+Data sheet
+https://files.seeedstudio.com/wiki/JetsonOrin/Jetson_AGX_Orin_DevKit_Carrier_Board_Specification_SP-10900-001_v1.0.pdf
