@@ -1,17 +1,16 @@
 
 
-Camera -> ZED 2i
+Camera -> ZEDX
 
-Jetson ->
+Jetson -> Jetson AGX XAVIER 64GB
 
-LiDAR -> main lidar S2 or S3 from slamtek
+LiDAR -> main lidar S3 from slamtek and c1
 
 Ultrasonic -> TDK
 
 BMS -> pending
 
-GPS -> pending
-
-Microcontroller -> Pending
-
 Router -> teltonika
+
+IMU -> PHIDGETS
+
